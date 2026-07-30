@@ -1,0 +1,83 @@
+# Overwrite agent configuration
+# Secrets NEVER go here - they come from .env / environment:
+#   DERIVE_WALLET, DERIVE_SESSION_KEY, DERIVE_SUBACCOUNT_ID
+
+venue: derive            # mock | derive
+quote_asset: USDC
+cycle_seconds: 900       # decision cadence (15 min)
+state_db: data/overwrite.db
+log_dir: data/logs
+
+# SAFE DEFAULT. To trade for real you must BOTH set this false AND pass --live.
+dry_run: true
+
+derive:
+  environment: test      # test = Derive testnet (api-demo.lyra.finance) | prod
+  extra_fee: "0"         # builder-code fee per trade in USDC (revenue hook)
+
+underlyings:
+  # ---- live on Derive today -------------------------------------------------
+  - symbol: ETH
+    enabled: true
+    max_utilization: "0.90"
+    delta_target: "0.25"
+    delta_min: "0.12"
+    delta_max: "0.35"
+    dte_target: 35
+    dte_min: 25
+    dte_max: 60
+    roll_dte: 21
+    take_profit_pct: "0.75"
+    defensive_delta: "0.60"
+    min_annualized_yield: "0.06"
+    max_spread_pct: "0.15"
+    min_order: "0.1"
+    max_order: "5"
+  - symbol: BTC
+    enabled: true
+    max_utilization: "0.90"
+    delta_target: "0.25"
+    dte_target: 35
+    roll_dte: 21
+    min_annualized_yield: "0.05"
+    min_order: "0.01"
+    max_order: "0.5"
+
+  # ---- equities: flip enabled:true the day Derive lists tokenized stocks ----
+  # Premium expectations from validation run (gross, 0.25-0.30 delta):
+  #   SPY ~10%/yr (marginal), AAPL ~14%, NVDA ~27%, TSLA ~27%
+  - symbol: NVDA
+    enabled: false
+    delta_target: "0.25"
+    dte_target: 35
+    min_annualized_yield: "0.12"
+  - symbol: TSLA
+    enabled: false
+    delta_target: "0.25"
+    dte_target: 35
+    min_annualized_yield: "0.12"
+  - symbol: AAPL
+    enabled: false
+    delta_target: "0.25"
+    dte_target: 35
+    min_annualized_yield: "0.08"
+  - symbol: SPY
+    enabled: false
+    delta_target: "0.30"    # SPY needs 0.30 delta to clear ~10% gross
+    dte_target: 35
+    min_annualized_yield: "0.07"
+
+risk:
+  max_maintenance_usage: "0.40"
+  max_orders_per_day: 60
+  max_price_dev_from_mark: "0.25"
+  max_quote_age_sec: 90
+  kill_switch_file: data/KILL
+  pause_file: data/PAUSE
+  max_drawdown_pause: "0.15"
+
+execution:
+  fill_timeout_sec: 45
+  max_reprices: 3
+  aggression: "0.25"
+  post_only: true

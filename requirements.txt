@@ -1,0 +1,3 @@
+pyyaml>=6
+derive_client>=0.3
+derive-action-signing>=0.0.13

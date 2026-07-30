@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-ink text-paper font-sans antialiased;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: #3dffa8;
+  color: #0a0e0d;
+}
+
+/* --- reveal-on-scroll ------------------------------------------------- */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.22s; }
+.reveal-delay-3 { transition-delay: 0.34s; }
+
+/* --- marquee ----------------------------------------------------------- */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-track {
+  animation: marquee 36s linear infinite;
+}
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+/* --- hero grid backdrop -------------------------------------------------- */
+.grid-backdrop {
+  background-image:
+    linear-gradient(to right, rgba(61, 255, 168, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(61, 255, 168, 0.05) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 30%, black 30%, transparent 75%);
+}
+
+/* --- soft glow orbs ---------------------------------------------------- */
+.orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* --- tilt cards ---------------------------------------------------------- */
+.tilt {
+  transform-style: preserve-3d;
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* --- ticking numbers ------------------------------------------------------ */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.live-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+/* thin scrollbars for dashboard tables */
+.thin-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
+.thin-scroll::-webkit-scrollbar-thumb { background: #1e2a26; border-radius: 3px; }
