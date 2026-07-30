@@ -1,7 +1,7 @@
 __pycache__/
 *.pyc
 .env
-data/
+/data/
 .pytest_cache/
 node_modules/
 contracts/cache/
