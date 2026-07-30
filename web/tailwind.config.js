@@ -4,19 +4,19 @@ export default {
   theme: {
     extend: {
       colors: {
-        paper: "#F2EFE6",     // warm newsprint
-        cream: "#EAE6D8",
-        ink: "#161513",       // near-black ink (also dashboard bg)
-        pane: "#201F1C",      // dashboard panel
-        line: "#D9D3C2",      // faint rule on paper
-        darkline: "#35332E",  // rule on ink
-        fog: "#6E6A5E",       // muted ink
-        dfog: "#9A968A",      // muted on dark
-        accent: "#E8450A",    // signal orange-red
-        market: "#0E7C3F",    // print green (money)
-        mint: "#27C281",      // terminal green (dashboard)
-        amber: "#B97A00",
-        rose: "#C42847"
+        paper: "#E9F2EC",     // off-white text/borders
+        cream: "#0E1512",
+        ink: "#0A0E0D",       // page + dashboard bg
+        pane: "#101614",      // panel
+        line: "#1E2A26",      // faint rule
+        darkline: "#1E2A26",
+        fog: "#8FA89C",       // muted
+        dfog: "#8FA89C",
+        accent: "#3DFFA8",    // mint
+        market: "#3DFFA8",
+        mint: "#3DFFA8",
+        amber: "#FFB84D",
+        rose: "#FF6B7A"
       },
       fontFamily: {
         display: ["'Anton'", "sans-serif"],
@@ -25,9 +25,9 @@ export default {
         mono: ["'Courier Prime'", "'Courier New'", "monospace"]
       },
       boxShadow: {
-        hard: "6px 6px 0 0 #161513",
-        hardsm: "3px 3px 0 0 #161513",
-        hardaccent: "6px 6px 0 0 #E8450A"
+        hard: "6px 6px 0 0 rgba(61,255,168,0.55)",
+        hardsm: "3px 3px 0 0 rgba(61,255,168,0.55)",
+        hardaccent: "6px 6px 0 0 #3DFFA8"
       }
     }
   },

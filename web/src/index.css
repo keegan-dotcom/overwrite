@@ -5,11 +5,11 @@
 html { scroll-behavior: smooth; }
 
 body {
-  @apply bg-paper text-ink font-serif antialiased;
+  @apply bg-ink text-paper font-serif antialiased;
   overflow-x: hidden;
 }
 
-::selection { background: #e8450a; color: #f2efe6; }
+::selection { background: #3dffa8; color: #0a0e0d; }
 
 /* --- reveal-on-scroll: print feel, no float — a sharp unmask ------------- */
 .reveal {
@@ -34,7 +34,7 @@ body {
 .cursor-block {
   display: inline-block;
   width: 0.55em; height: 1em;
-  background: #e8450a;
+  background: #3dffa8;
   vertical-align: -0.12em;
   animation: blink 1.05s step-start infinite;
 }
@@ -44,37 +44,37 @@ body {
 .strike::after {
   content: "";
   position: absolute; left: -2%; right: 102%; top: 52%;
-  height: 0.09em; background: #e8450a; transform: rotate(-1.2deg);
+  height: 0.09em; background: #3dffa8; transform: rotate(-1.2deg);
   transition: right 0.5s cubic-bezier(0.7, 0, 0.3, 1) 0.9s;
 }
 .is-visible .strike::after, .strike.struck::after { right: -3%; }
 
 /* --- hard-shadow ticket cards -------------------------------------------- */
 .ticket {
-  @apply border-2 border-ink bg-paper;
-  box-shadow: 6px 6px 0 0 #161513;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  @apply border-2 border-paper/80 bg-pane;
+  box-shadow: 6px 6px 0 0 rgba(61, 255, 168, 0.45);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
 }
-.ticket:hover { transform: translate(-2px, -2px); box-shadow: 9px 9px 0 0 #161513; }
-.ticket-accent:hover { box-shadow: 9px 9px 0 0 #e8450a; }
+.ticket:hover { transform: translate(-2px, -2px); box-shadow: 9px 9px 0 0 rgba(61, 255, 168, 0.65); border-color: #e9f2ec; }
+.ticket-accent:hover { box-shadow: 9px 9px 0 0 #3dffa8; }
 
 /* --- newspaper rules ------------------------------------------------------ */
-.rule-double { border-top: 3px solid #161513; position: relative; }
+.rule-double { border-top: 3px solid #e9f2ec; position: relative; }
 .rule-double::after {
   content: ""; position: absolute; left: 0; right: 0; top: 4px;
-  border-top: 1px solid #161513;
+  border-top: 1px solid #e9f2ec;
 }
 
 /* --- paper grain (subtle, CSS-only) -------------------------------------- */
 .grain {
-  background-image: radial-gradient(#16151310 1px, transparent 1px);
+  background-image: radial-gradient(rgba(61,255,168,0.07) 1px, transparent 1px);
   background-size: 5px 5px;
 }
 
 /* --- registration-mark corners for hero ticket ---------------------------- */
 .regmarks { position: relative; }
 .regmarks::before, .regmarks::after {
-  content: "+"; position: absolute; color: #6e6a5e;
+  content: "+"; position: absolute; color: #8fa89c;
   font-family: "Courier Prime", monospace; font-size: 14px; line-height: 1;
 }
 .regmarks::before { top: -20px; left: -20px; }
@@ -82,7 +82,7 @@ body {
 
 /* --- dashboard (terminal) side keeps dark scrollbars ---------------------- */
 .thin-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
-.thin-scroll::-webkit-scrollbar-thumb { background: #35332e; border-radius: 0; }
+.thin-scroll::-webkit-scrollbar-thumb { background: #1e2a26; border-radius: 0; }
 
 @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
 .live-dot { animation: pulse-dot 1.6s ease-in-out infinite; }

@@ -30,7 +30,7 @@ export function Hero() {
   const eth = UNDERLYINGS[0];
 
   return (
-    <section className="grain border-b-2 border-ink pt-[58px]">
+    <section className="grain border-b-2 border-paper pt-[58px]">
       <div className="mx-auto max-w-6xl px-5">
         {/* masthead strip */}
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line py-2 font-mono text-[11px] uppercase tracking-[0.14em] text-fog">
@@ -46,7 +46,7 @@ export function Hero() {
           {/* headline column */}
           <div>
             <Reveal>
-              <p className="mb-6 inline-block border-2 border-ink bg-ink px-3 py-1 font-mono text-[12px] uppercase tracking-[0.2em] text-paper">
+              <p className="mb-6 inline-block border-2 border-paper bg-ink px-3 py-1 font-mono text-[12px] uppercase tracking-[0.2em] text-paper">
                 MODE: <span className="text-accent font-bold">OVR</span> — insert is for buyers
               </p>
             </Reveal>
@@ -62,7 +62,7 @@ export function Hero() {
               </h1>
             </Reveal>
             <Reveal delay={2}>
-              <p className="mt-8 max-w-xl font-serif text-xl leading-relaxed text-ink/85">
+              <p className="mt-8 max-w-xl font-serif text-xl leading-relaxed text-paper/85">
                 Overwrite is an autonomous agent that sells covered calls against
                 what you already hold — systematically, on-chain, on{" "}
                 <a
@@ -80,13 +80,13 @@ export function Hero() {
               <div className="mt-9 flex flex-wrap items-center gap-4 font-mono text-sm uppercase tracking-[0.06em]">
                 <a
                   href="#yield"
-                  className="border-2 border-ink bg-accent px-6 py-3 font-bold text-paper shadow-hard transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
+                  className="border-2 border-paper bg-accent px-6 py-3 font-bold text-ink shadow-hard transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
                 >
                   See the honest numbers
                 </a>
                 <Link
                   to="/dashboard"
-                  className="border-2 border-ink bg-paper px-6 py-3 text-ink shadow-hard transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
+                  className="border-2 border-paper bg-ink px-6 py-3 text-paper shadow-hard transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
                 >
                   Watch it trade →
                 </Link>
@@ -97,7 +97,7 @@ export function Hero() {
           {/* order ticket */}
           <Reveal delay={2} className="hidden lg:block">
             <div className="regmarks ticket ticket-accent -rotate-1 p-6">
-              <div className="flex items-baseline justify-between border-b-2 border-ink pb-3 font-mono text-[12px] uppercase tracking-[0.1em]">
+              <div className="flex items-baseline justify-between border-b-2 border-paper pb-3 font-mono text-[12px] uppercase tracking-[0.1em]">
                 <span className="font-bold">Sell ticket № 0001</span>
                 <span className="text-accent font-bold">gross {pct(eth.gross.d25, 0)}/yr</span>
               </div>
@@ -111,7 +111,7 @@ export function Hero() {
                 <span className="text-fog">ORDER TYPE</span><span>limit only. always.</span>
               </div>
               <PayoffSketch />
-              <p className="mt-4 border-t-2 border-ink pt-3 font-serif text-[15px] leading-relaxed text-ink/80">
+              <p className="mt-4 border-t-2 border-paper pt-3 font-serif text-[15px] leading-relaxed text-paper/80">
                 Premium in every cycle. Upside capped past the strike — priced,
                 not hidden. Downside stays yours.{" "}
                 <a href="#honest" className="underline decoration-accent decoration-2 underline-offset-2">
@@ -130,18 +130,18 @@ function PayoffSketch() {
   return (
     <svg viewBox="0 0 320 140" className="mt-4 w-full" aria-label="Covered call payoff diagram">
       {/* axes */}
-      <line x1="14" y1="116" x2="306" y2="116" stroke="#161513" strokeWidth="2" />
-      <line x1="14" y1="12" x2="14" y2="116" stroke="#161513" strokeWidth="2" />
+      <line x1="14" y1="116" x2="306" y2="116" stroke="#E9F2EC" strokeWidth="2" />
+      <line x1="14" y1="12" x2="14" y2="116" stroke="#E9F2EC" strokeWidth="2" />
       {/* buy-and-hold */}
-      <path d="M14 116 L 292 26" stroke="#6E6A5E" strokeWidth="1.5" strokeDasharray="6 5" fill="none" />
+      <path d="M14 116 L 292 26" stroke="#8FA89C" strokeWidth="1.5" strokeDasharray="6 5" fill="none" />
       {/* covered call */}
-      <path d="M14 100 L 190 40 L 306 40" stroke="#E8450A" strokeWidth="4" fill="none" strokeLinecap="square" />
-      <line x1="190" y1="40" x2="190" y2="116" stroke="#161513" strokeWidth="1" strokeDasharray="2 4" />
-      <text x="190" y="132" textAnchor="middle" fill="#6E6A5E" fontSize="11" fontFamily="Courier Prime">strike</text>
-      <text x="290" y="20" textAnchor="end" fill="#6E6A5E" fontSize="11" fontFamily="Courier Prime">hold</text>
-      <text x="300" y="56" textAnchor="end" fill="#E8450A" fontSize="11" fontFamily="Courier Prime" fontWeight="bold">overwrite</text>
-      <line x1="8" y1="100" x2="8" y2="116" stroke="#0E7C3F" strokeWidth="3" />
-      <text x="22" y="97" fill="#0E7C3F" fontSize="11" fontFamily="Courier Prime">premium</text>
+      <path d="M14 100 L 190 40 L 306 40" stroke="#3DFFA8" strokeWidth="4" fill="none" strokeLinecap="square" />
+      <line x1="190" y1="40" x2="190" y2="116" stroke="#8FA89C" strokeWidth="1" strokeDasharray="2 4" />
+      <text x="190" y="132" textAnchor="middle" fill="#8FA89C" fontSize="11" fontFamily="Courier Prime">strike</text>
+      <text x="290" y="20" textAnchor="end" fill="#8FA89C" fontSize="11" fontFamily="Courier Prime">hold</text>
+      <text x="300" y="56" textAnchor="end" fill="#3DFFA8" fontSize="11" fontFamily="Courier Prime" fontWeight="bold">overwrite</text>
+      <line x1="8" y1="100" x2="8" y2="116" stroke="#FFB84D" strokeWidth="3" />
+      <text x="22" y="97" fill="#FFB84D" fontSize="11" fontFamily="Courier Prime">premium</text>
     </svg>
   );
 }

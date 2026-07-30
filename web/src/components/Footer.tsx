@@ -2,7 +2,7 @@ import { Logo } from "./Logo";
 
 export function Footer() {
   return (
-    <footer className="border-t-2 border-ink bg-ink text-paper">
+    <footer className="border-t-2 border-paper bg-ink text-paper">
       <div className="mx-auto max-w-6xl px-5 pt-14">
         <div className="flex flex-col gap-10 md:flex-row md:items-start md:justify-between">
           <div className="max-w-sm">

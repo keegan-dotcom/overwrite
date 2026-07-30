@@ -27,8 +27,8 @@ export function Nav() {
         onDash
           ? "border-darkline bg-ink"
           : scrolled
-          ? "border-ink bg-paper"
-          : "border-ink bg-paper"
+          ? "border-line bg-ink/90 backdrop-blur"
+          : "border-line bg-ink"
       }`}
     >
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3">
@@ -44,7 +44,7 @@ export function Nav() {
             <a
               key={l.href}
               href={l.href}
-              className={`transition-colors ${onDash ? "hover:text-paper" : "hover:text-ink"}`}
+              className={`transition-colors ${onDash ? "hover:text-paper" : "hover:text-paper"}`}
             >
               {l.label}
             </a>
@@ -56,7 +56,7 @@ export function Nav() {
             className={`border-2 px-3.5 py-1.5 transition-colors ${
               onDash
                 ? "border-mint text-mint"
-                : "border-ink text-ink hover:bg-ink hover:text-paper"
+                : "border-paper text-paper hover:border-mint hover:text-mint"
             }`}
           >
             Console
@@ -65,7 +65,7 @@ export function Nav() {
             href="https://testnet.derive.xyz"
             target="_blank"
             rel="noreferrer"
-            className="hidden border-2 border-ink bg-accent px-3.5 py-1.5 font-bold text-paper shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px sm:block"
+            className="hidden border-2 border-paper bg-accent px-3.5 py-1.5 font-bold text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px sm:block"
           >
             Run the agent
           </a>

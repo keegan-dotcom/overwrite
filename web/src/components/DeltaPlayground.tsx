@@ -32,7 +32,7 @@ export function DeltaPlayground() {
         <div className="mt-12 grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
           {/* controls: a settings panel styled like a print order form */}
           <div className="ticket p-6">
-            <p className="border-b-2 border-ink pb-2 font-mono text-[12px] font-bold uppercase tracking-[0.18em]">
+            <p className="border-b-2 border-paper pb-2 font-mono text-[12px] font-bold uppercase tracking-[0.18em]">
               Field A — Asset
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -42,8 +42,8 @@ export function DeltaPlayground() {
                   onClick={() => setSym(x.symbol)}
                   className={`border-2 px-4 py-1.5 font-mono text-sm font-bold transition-colors ${
                     sym === x.symbol
-                      ? "border-ink bg-ink text-paper"
-                      : "border-ink bg-paper text-ink hover:bg-cream"
+                      ? "border-mint bg-mint/10 text-mint"
+                      : "border-line bg-ink text-fog hover:border-fog hover:text-paper"
                   }`}
                 >
                   {x.symbol}
@@ -52,7 +52,7 @@ export function DeltaPlayground() {
               ))}
             </div>
 
-            <p className="mt-8 border-b-2 border-ink pb-2 font-mono text-[12px] font-bold uppercase tracking-[0.18em]">
+            <p className="mt-8 border-b-2 border-paper pb-2 font-mono text-[12px] font-bold uppercase tracking-[0.18em]">
               Field B — Call delta
             </p>
             <input
@@ -76,7 +76,7 @@ export function DeltaPlayground() {
                 </button>
               ))}
             </div>
-            <p className="mt-6 font-serif text-[15px] leading-relaxed text-ink/80">
+            <p className="mt-6 font-serif text-[15px] leading-relaxed text-paper/80">
               <span className="font-semibold">{d.tag}.</span> {d.capOdds}. Higher
               delta, fatter premium, more upside sold. There is no setting where
               you get both.
@@ -130,7 +130,7 @@ function Stat({
   const color =
     tone === "market" ? "text-market" :
     tone === "rose" ? "text-rose" :
-    tone === "amber" ? "text-amber" : "text-ink";
+    tone === "amber" ? "text-amber" : "text-paper";
   return (
     <div className="ticket p-6">
       <p className={`font-display text-5xl leading-none ${color}`}>{big}</p>

@@ -9,7 +9,7 @@ export function Ticker() {
   }));
   const row = [...items, ...items];
   return (
-    <div className="overflow-hidden border-b-2 border-ink bg-ink py-2.5">
+    <div className="overflow-hidden border-b-2 border-paper bg-pane py-2.5">
       <div className="marquee-track flex w-max items-center gap-10 px-5">
         {row.map((it, i) => (
           <span key={i} className="flex items-center gap-2.5 font-mono text-[13px] text-dfog">
@@ -17,7 +17,7 @@ export function Ticker() {
             <span className="font-bold text-paper">{it.label}</span>
             {it.value}
             {!it.live && <span className="text-amber">· awaiting listing</span>}
-            <span className="text-darkline">///</span>
+            <span className="text-line">///</span>
           </span>
         ))}
       </div>

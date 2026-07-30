@@ -30,7 +30,7 @@ function VaultCard({ u, idx }: { u: (typeof UNDERLYINGS)[number]; idx: number })
   return (
     <div className={`ticket ticket-accent p-0 ${idx % 2 ? "rotate-[0.6deg]" : "-rotate-[0.6deg]"} hover:rotate-0`}>
       {/* ticket header strip */}
-      <div className={`flex items-center justify-between border-b-2 border-ink px-5 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.14em] ${u.live ? "bg-market text-paper" : "bg-amber/20 text-ink"}`}>
+      <div className={`flex items-center justify-between border-b-2 border-paper px-5 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.14em] ${u.live ? "bg-mint text-ink" : "bg-amber/20 text-paper"}`}>
         <span>{u.live ? "● Testnet live" : "○ Awaiting listing"}</span>
         <span>№ {String(idx + 1).padStart(3, "0")}</span>
       </div>
@@ -51,7 +51,7 @@ function VaultCard({ u, idx }: { u: (typeof UNDERLYINGS)[number]; idx: number })
             <p className="mt-1 font-mono text-[11px] uppercase text-fog">IV30</p>
           </div>
         </div>
-        <p className="mt-4 border-t-2 border-dashed border-ink pt-3 font-mono text-[12px] leading-relaxed text-fog">
+        <p className="mt-4 border-t-2 border-dashed border-fog/50 pt-3 font-mono text-[12px] leading-relaxed text-fog">
           {u.live
             ? "Selling 25–60 DTE calls on Derive testnet now. Mainnet: bring your own keys."
             : "Parameters pre-tuned from validation. Flips on the day Derive lists it."}

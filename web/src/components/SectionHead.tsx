@@ -22,11 +22,11 @@ export function SectionHead({
           <span className={`font-bold ${dark ? "text-accent" : "text-accent"}`}>№ {no}</span>
           <span>{kicker}</span>
         </div>
-        <h2 className={`mt-4 max-w-3xl font-display text-4xl uppercase leading-[0.98] sm:text-6xl ${dark ? "text-paper" : "text-ink"}`}>
+        <h2 className={`mt-4 max-w-3xl font-display text-4xl uppercase leading-[0.98] sm:text-6xl ${dark ? "text-paper" : "text-paper"}`}>
           {title}
         </h2>
         {children && (
-          <p className={`mt-5 max-w-xl font-serif text-lg leading-relaxed ${dark ? "text-dfog" : "text-ink/75"}`}>
+          <p className={`mt-5 max-w-xl font-serif text-lg leading-relaxed ${dark ? "text-dfog" : "text-paper/75"}`}>
             {children}
           </p>
         )}

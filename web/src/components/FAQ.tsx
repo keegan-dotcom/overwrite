@@ -32,16 +32,16 @@ const faqs = [
 export function FAQ() {
   const [open, setOpen] = useState<number | null>(0);
   return (
-    <section className="border-t-2 border-ink bg-cream py-24">
+    <section className="border-t-2 border-paper bg-pane py-24">
       <div className="mx-auto max-w-3xl px-5">
         <SectionHead
           no="06"
           kicker="Correspondence"
           title={<>Questions people actually ask<span className="text-accent">.</span></>}
         />
-        <div className="mt-10 border-2 border-ink bg-paper shadow-hard">
+        <div className="mt-10 border-2 border-paper bg-ink shadow-hard">
           {faqs.map((f, i) => (
-            <div key={f.q} className={i > 0 ? "border-t-2 border-ink" : ""}>
+            <div key={f.q} className={i > 0 ? "border-t border-line" : ""}>
               <button
                 onClick={() => setOpen(open === i ? null : i)}
                 className="flex w-full items-center justify-between gap-6 px-6 py-4 text-left transition-colors hover:bg-cream"
@@ -61,7 +61,7 @@ export function FAQ() {
                 style={{ gridTemplateRows: open === i ? "1fr" : "0fr" }}
               >
                 <div className="overflow-hidden">
-                  <p className="px-6 pb-6 font-serif text-[15px] leading-relaxed text-ink/75">{f.a}</p>
+                  <p className="px-6 pb-6 font-serif text-[15px] leading-relaxed text-paper/75">{f.a}</p>
                 </div>
               </div>
             </div>

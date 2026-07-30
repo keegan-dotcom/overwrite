@@ -30,21 +30,21 @@ const steps = [
 
 export function HowItWorks() {
   return (
-    <section id="how" className="border-y-2 border-ink bg-cream py-24">
+    <section id="how" className="border-y-2 border-paper bg-pane py-24">
       <div className="mx-auto max-w-6xl px-5">
         <SectionHead
           no="02"
           kicker="The loop"
           title={<>A patient seller that never sleeps<span className="text-accent">.</span></>}
         />
-        <div className="mt-12 grid border-2 border-ink bg-ink gap-px md:grid-cols-4">
+        <div className="mt-12 grid border-2 border-paper bg-darkline gap-px md:grid-cols-4">
           {steps.map((s, i) => (
             <Reveal key={s.n} delay={(i % 4) as 0 | 1 | 2 | 3} className="h-full">
-              <div className="group flex h-full flex-col bg-paper p-6 transition-colors hover:bg-cream">
+              <div className="group flex h-full flex-col bg-ink p-6 transition-colors hover:bg-cream">
                 <p className="font-display text-5xl text-line transition-colors group-hover:text-accent">{s.n}</p>
                 <h3 className="mt-3 font-display text-2xl uppercase">{s.title}</h3>
-                <p className="mt-3 flex-1 font-serif text-[15px] leading-relaxed text-ink/75">{s.body}</p>
-                <p className="mt-5 border-t-2 border-ink pt-3 font-mono text-[12px] text-market">
+                <p className="mt-3 flex-1 font-serif text-[15px] leading-relaxed text-paper/75">{s.body}</p>
+                <p className="mt-5 border-t border-line pt-3 font-mono text-[12px] text-mint">
                   {s.mono}
                 </p>
               </div>
