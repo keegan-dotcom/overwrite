@@ -271,16 +271,27 @@ class DeriveVenue(Venue):
             TimeInForce,
         )
 
+        # API constraint: extra_fee must be in [0.000001, 1000] USDC and
+        # requires a referral_code. With no builder fee configured (0), the
+        # kwarg must be OMITTED entirely - passing 0 is -32602 Invalid params.
+        kwargs = {}
+        if self._cfg.extra_fee >= Decimal("0.000001"):
+            kwargs["extra_fee"] = self._cfg.extra_fee
+        # defensive label sanitation: alphanumerics, dash, underscore only
+        safe_label = "".join(
+            ch for ch in label if ch.isalnum() or ch in "-_"
+        )[:32]
+
         res = self._client.orders.create(
             amount=amount,
             direction=Direction.sell if side == Side.SELL else Direction.buy,
             instrument_name=instrument_name,
             limit_price=limit_price,
-            label=label[:32],
+            label=safe_label,
             order_type=OrderType.limit,
             time_in_force=TimeInForce.post_only if post_only else TimeInForce.gtc,
             reduce_only=reduce_only,
-            extra_fee=self._cfg.extra_fee,   # builder-code revenue hook
+            **kwargs,
         )
         return self._order_result(res)
 

@@ -9,7 +9,7 @@ state_db: data/overwrite.db
 log_dir: data/logs
 
 # SAFE DEFAULT. To trade for real you must BOTH set this false AND pass --live.
-dry_run: true
+dry_run: false
 
 derive:
   environment: test      # test = Derive testnet (api-demo.lyra.finance) | prod
