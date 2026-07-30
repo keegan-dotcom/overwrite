@@ -143,13 +143,37 @@ class DeriveVenue(Venue):
         from derive_client.data_types.generated_models import InstrumentType
 
         currency = self._currency(underlying)
+        spot = self.spot(underlying)
         instruments = self._client.markets.get_instruments(
             currency=currency, expired=False, instrument_type=InstrumentType.option
         )
         now = time.time()
+
+        def _worth_quoting(name: str) -> bool:
+            """Pre-filter BEFORE the per-instrument ticker call (which is the
+            expensive part - hundreds of serial HTTP calls otherwise).
+            Calls only; expiry <= 100d; strike within [0.5x, 2.5x] spot.
+            Wide bounds on purpose: held positions must stay quotable for
+            management even after big spot moves. Unparseable names are kept
+            (fail open)."""
+            try:
+                _cur, day, strike_s, ot = name.split("-")
+                if ot != "C":
+                    return False
+                import calendar as _cal
+                exp = _cal.timegm(time.strptime(day, "%Y%m%d")) + 8 * 3600
+                if (exp - now) / 86400 > 100:
+                    return False
+                k = Decimal(strike_s)
+                return spot * Decimal("0.5") <= k <= spot * Decimal("2.5")
+            except Exception:
+                return True
+
         out: list[OptionQuote] = []
         for inst in instruments:
             name = inst.instrument_name
+            if not _worth_quoting(name):
+                continue
             try:
                 t = self._client.markets.get_ticker(instrument_name=name)
             except Exception:
@@ -214,18 +238,21 @@ class DeriveVenue(Venue):
         return out
 
     def margin(self) -> MarginSummary:
-        # collateral.get_margin() returns only pre/post simulation deltas
-        # (PrivateGetMarginResultSchema has no subaccount_value); the margin
-        # picture lives on the subaccount state (private/get_subaccount).
-        # NOTE: verify sign semantics on testnet before live - Derive reports
-        # margin fields that can be negative; abs() treats them as
-        # requirements, and a misread only makes the gate MORE conservative
-        # (higher usage -> sells vetoed), never less.
+        # Derive's private/get_subaccount reports initial_margin /
+        # maintenance_margin as AVAILABLE HEADROOM (equity minus requirement),
+        # not the requirement itself. Confirmed on live testnet 2026-07-30:
+        # subaccount_value ~= 100,073 with maintenance_margin ~= 100,058 on a
+        # near-empty book. MarginSummary wants the REQUIREMENT, so convert:
+        #     requirement = subaccount_value - available   (clamped >= 0)
         st = self._sub.refresh().state
+        value = _to_dec(st.subaccount_value)
+        im_avail = _to_dec(st.initial_margin)
+        mm_avail = _to_dec(st.maintenance_margin)
+        zero = Decimal(0)
         return MarginSummary(
-            total_value=_to_dec(st.subaccount_value),
-            initial_margin=abs(_to_dec(st.initial_margin)),
-            maintenance_margin=abs(_to_dec(st.maintenance_margin)),
+            total_value=value,
+            initial_margin=max(zero, value - im_avail),
+            maintenance_margin=max(zero, value - mm_avail),
         )
 
     def place_limit(
