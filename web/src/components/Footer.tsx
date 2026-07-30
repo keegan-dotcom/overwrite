@@ -19,6 +19,7 @@ export function Footer() {
                 <li><a className="hover:text-accent" href="/#yield">The dial</a></li>
                 <li><a className="hover:text-accent" href="/#vaults">Vaults</a></li>
                 <li><a className="hover:text-accent" href="/dashboard">Console</a></li>
+                <li><a className="hover:text-accent" href="/#waitlist">Hosted waitlist</a></li>
               </ul>
             </div>
             <div>

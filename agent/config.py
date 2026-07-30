@@ -100,6 +100,9 @@ class AgentConfig:
     cycle_seconds: int = 900
     state_db: str = "data/overwrite.db"
     log_dir: str = "data/logs"
+    # optional: write a public status.json each cycle (the site's live
+    # track-record feed). Empty = disabled. e.g. "web/public/status.json"
+    status_export: str = ""
     dry_run: bool = True               # SAFE DEFAULT: no orders unless flipped
     underlyings: tuple[UnderlyingConfig, ...] = ()
     risk: RiskConfig = field(default_factory=RiskConfig)
@@ -172,6 +175,7 @@ def load_config(path: str | Path) -> AgentConfig:
         cycle_seconds=int(raw.get("cycle_seconds", 900)),
         state_db=raw.get("state_db", "data/overwrite.db"),
         log_dir=raw.get("log_dir", "data/logs"),
+        status_export=raw.get("status_export", ""),
         dry_run=bool(raw.get("dry_run", True)),
         underlyings=tuple(unders),
         risk=RiskConfig(**risk_raw),

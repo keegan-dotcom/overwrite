@@ -53,6 +53,7 @@ yield* with that caveat — see `docs/STRATEGY.md` for the full analysis.
 ## Quickstart
 
 ```bash
+./install.sh        # python check + venv + deps + .env wizard (or do it by hand:)
 pip install -r requirements.txt
 
 # 1. Simulated exchange, no keys needed:

@@ -7,6 +7,7 @@ const links = [
   { href: "/#how", label: "The Loop" },
   { href: "/#vaults", label: "Vaults" },
   { href: "/#safety", label: "Rails" },
+  { href: "/#waitlist", label: "Hosted" },
 ];
 
 export function Nav() {

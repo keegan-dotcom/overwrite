@@ -7,9 +7,13 @@ quote_asset: USDC
 cycle_seconds: 900       # decision cadence (15 min)
 state_db: data/overwrite.db
 log_dir: data/logs
+# live track-record feed for the website (empty = off). The run loop writes
+# this every cycle; commit+push web/public/status.json to publish it.
+status_export: ""
+
 
 # SAFE DEFAULT. To trade for real you must BOTH set this false AND pass --live.
-dry_run: false
+dry_run: true
 
 derive:
   environment: test      # test = Derive testnet (api-demo.lyra.finance) | prod

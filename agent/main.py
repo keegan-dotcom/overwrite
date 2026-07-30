@@ -69,6 +69,8 @@ def cmd_once(cfg: AgentConfig) -> None:
 
 
 def cmd_run(cfg: AgentConfig) -> None:
+    from .export import export_status
+
     venue = build_venue(cfg)
     state = StateStore(cfg.state_db)
     log = logging.getLogger("overwrite")
@@ -79,6 +81,9 @@ def cmd_run(cfg: AgentConfig) -> None:
         try:
             summary = run_cycle(cfg, venue, state)
             log.info("cycle done: %s", json.dumps(summary, default=str)[:800])
+            out = export_status(cfg, state, venue)
+            if out:
+                log.info("status exported -> %s", out)
         except KeyboardInterrupt:
             raise
         except Exception:
@@ -148,10 +153,24 @@ def cmd_close_all(cfg: AgentConfig) -> None:
                   executor.execute(intent))
 
 
+def cmd_export_status(cfg: AgentConfig, out: str | None) -> None:
+    """Offline status.json export from the state DB (positions omitted)."""
+    from .export import export_status
+
+    state = StateStore(cfg.state_db)
+    path = export_status(cfg, state, venue=None,
+                         path=out or cfg.status_export or "web/public/status.json")
+    print(f"wrote {path}")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="overwrite")
-    ap.add_argument("command", choices=["run", "once", "status", "close-all"])
+    ap.add_argument("command",
+                    choices=["run", "once", "status", "close-all",
+                             "export-status"])
     ap.add_argument("--config", default="configs/config.example.yaml")
+    ap.add_argument("--out", default=None,
+                    help="output path for export-status")
     ap.add_argument("--live", action="store_true",
                     help="allow real orders (requires dry_run: false in YAML too)")
     args = ap.parse_args(argv)
@@ -168,6 +187,8 @@ def main(argv: list[str] | None = None) -> int:
         cmd_status(cfg)
     elif args.command == "close-all":
         cmd_close_all(cfg)
+    elif args.command == "export-status":
+        cmd_export_status(cfg, args.out)
     return 0
 
 

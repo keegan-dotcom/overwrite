@@ -102,6 +102,17 @@ class StateStore:
         )
         return Decimal(str(cur.fetchone()[0]))
 
+    def recent_ledger(self, n: int = 20) -> list[dict]:
+        cur = self._db.execute(
+            "SELECT ts, underlying, instrument, kind, amount_usd FROM ledger"
+            " ORDER BY id DESC LIMIT ?", (n,)
+        )
+        return [
+            {"ts": ts, "underlying": u, "instrument": i, "kind": k,
+             "amount_usd": a}
+            for ts, u, i, k, a in cur.fetchall()
+        ]
+
     def record_equity(self, equity_usd: Decimal) -> None:
         self._db.execute(
             "INSERT INTO equity (ts, equity_usd) VALUES (?,?)",

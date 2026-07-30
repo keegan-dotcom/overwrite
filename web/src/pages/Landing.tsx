@@ -6,6 +6,7 @@ import { Vaults } from "../components/Vaults";
 import { Honest } from "../components/Honest";
 import { Safety } from "../components/Safety";
 import { FAQ } from "../components/FAQ";
+import { Waitlist } from "../components/Waitlist";
 
 export function Landing() {
   return (
@@ -17,6 +18,7 @@ export function Landing() {
       <Vaults />
       <Honest />
       <Safety />
+      <Waitlist />
       <FAQ />
     </main>
   );
