@@ -61,14 +61,18 @@ class RiskGate:
         age = time.time() - q.timestamp
         if age > self.cfg.risk.max_quote_age_sec:
             return f"quote stale: {age:.0f}s old"
-        if q.bid is None or q.ask is None:
-            return "one-sided or empty book"
         if q.mark <= 0:
             return "non-positive mark"
+        if q.bid is None or q.ask is None:
+            # maker mode may quote into an empty/one-sided book - but only
+            # post-only at/near mark, which the deviation check below bounds.
+            if not self.cfg.execution.maker_mode:
+                return "one-sided or empty book"
         dev = abs(limit_price - q.mark) / q.mark
         if dev > self.cfg.risk.max_price_dev_from_mark:
             return f"limit {limit_price} deviates {dev:.1%} from mark {q.mark}"
-        if intent.side == Side.SELL and limit_price < q.bid * Decimal("0.5"):
+        if (intent.side == Side.SELL and q.bid is not None
+                and limit_price < q.bid * Decimal("0.5")):
             return "sell limit below half of bid - refusing to give premium away"
         return None
 

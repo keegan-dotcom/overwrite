@@ -51,16 +51,23 @@ def main() -> None:
               f"{len(bid_calls)} with bids, {len(in_window)} in delta/DTE window")
         pick = select_call_to_sell(s, u)
         if pick:
-            print(f"  would pick: {pick.instrument_name} delta={pick.delta} "
+            print(f"  taker pick: {pick.instrument_name} delta={pick.delta} "
                   f"bid={pick.bid} ask={pick.ask}")
         else:
-            print("  nothing passes filters", end="")
+            print("  taker mode: nothing passes filters", end="")
             if s.held_units <= 0:
                 print("  <-- AND held_units=0: no base collateral to cover calls")
             else:
                 print()
-        intents = decide(s, u)
-        print(f"  decide() -> {len(intents)} intent(s): "
+        mpick = select_call_to_sell(s, u, maker=True)
+        if mpick:
+            print(f"  MAKER pick: {mpick.instrument_name} delta={mpick.delta} "
+                  f"mark={mpick.mark} (would rest post-only at mark)")
+        else:
+            print("  maker mode: nothing passes filters either")
+        maker_on = cfg.execution.maker_mode
+        intents = decide(s, u, maker=maker_on)
+        print(f"  decide(maker={maker_on}) -> {len(intents)} intent(s): "
               f"{[i.reason for i in intents]}")
 
 

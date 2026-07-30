@@ -20,10 +20,34 @@ from .venues.base import OptionQuote, OrderState, Venue
 log = logging.getLogger("overwrite")
 
 
-def _limit_price(q: OptionQuote, side: Side, step: int, aggression: Decimal) -> Decimal:
-    """Price ladder: step 0 near mid, walking toward the touch each reprice."""
+def _limit_price(
+    q: OptionQuote, side: Side, step: int, aggression: Decimal,
+    maker: bool = False,
+) -> Decimal:
+    """Price ladder: step 0 near mid, walking toward the touch each reprice.
+
+    maker=True + empty/one-sided book: quote AT MARK, post-only, and wait to
+    be lifted. Reprice steps concede slightly toward the taker each step
+    (0.5% per step) so a resting quote can still find a counterparty.
+    """
     if q.bid is None or q.ask is None:
-        raise ValueError("no two-sided book")
+        if not maker:
+            raise ValueError("no two-sided book")
+        if q.mark <= 0:
+            raise ValueError("maker mode needs a positive mark")
+        concession = Decimal("0.005") * step
+        px = (
+            q.mark * (Decimal(1) - concession)
+            if side == Side.SELL
+            else q.mark * (Decimal(1) + concession)
+        )
+        import decimal
+
+        tick = q.tick_size or Decimal("0.0001")
+        rounding = (
+            decimal.ROUND_FLOOR if side == Side.SELL else decimal.ROUND_CEILING
+        )
+        return (px / tick).to_integral_value(rounding=rounding) * tick
     mid = (q.bid + q.ask) / 2
     span = (q.ask - q.bid) / 2
     frac = min(Decimal(1), aggression * (step + 1))
@@ -91,9 +115,10 @@ class Executor:
         remaining = intent.amount
         self.last_filled_amount = Decimal(0)
         self.last_fill_price = None
+        maker = ex.maker_mode and (q.bid is None or q.ask is None)
 
         for step in range(ex.max_reprices + 1):
-            px = _limit_price(q, intent.side, step, ex.aggression)
+            px = _limit_price(q, intent.side, step, ex.aggression, maker=maker)
             try:
                 res = self.venue.place_limit(
                     instrument_name=intent.instrument_name,
@@ -101,7 +126,7 @@ class Executor:
                     amount=remaining,
                     limit_price=px,
                     label=f"ow:{intent.kind.value}",
-                    post_only=ex.post_only and step == 0,
+                    post_only=(ex.post_only and step == 0) or maker,
                     reduce_only=intent.kind == IntentKind.BUY_BACK,
                 )
             except Exception as exc:
@@ -140,6 +165,22 @@ class Executor:
                         break
                 if final.state not in (OrderState.FILLED, OrderState.CANCELLED,
                                        OrderState.REJECTED):
+                    if maker and step == ex.max_reprices:
+                        # Final maker step: LEAVE the quote resting until next
+                        # cycle instead of cancelling - a resting offer on a
+                        # quiet book is the whole point. run_cycle cancels
+                        # stale maker quotes at the start of each cycle.
+                        self.state.record_order(
+                            self.venue.name, intent.instrument_name,
+                            intent.side.value, remaining, px, "resting",
+                            res.order_id, intent.reason,
+                        )
+                        log.info("maker quote RESTING: %s %s %s @ %s",
+                                 intent.side.value, remaining,
+                                 intent.instrument_name, px)
+                        return (OrderState.PARTIAL
+                                if self.last_filled_amount > 0
+                                else OrderState.OPEN)
                     try:
                         self.venue.cancel(intent.instrument_name, res.order_id)
                     except Exception as exc:
@@ -201,6 +242,14 @@ def run_cycle(cfg: AgentConfig, venue: Venue, state: StateStore) -> dict:
     equity = margin.total_value
     state.record_equity(equity)
 
+    # maker mode: clear last cycle's resting quotes so we re-quote at fresh
+    # marks (stale quotes on a moving market are free money for takers).
+    if cfg.execution.maker_mode and not cfg.dry_run:
+        try:
+            venue.cancel_all()
+        except Exception as exc:
+            log.warning("cancel_all failed at cycle start: %r", exc)
+
     for ucfg in cfg.underlyings:
         if not ucfg.enabled:
             continue
@@ -216,14 +265,16 @@ def run_cycle(cfg: AgentConfig, venue: Venue, state: StateStore) -> dict:
             summary["underlyings"][ucfg.symbol] = entry
             continue
 
-        intents = decide(snap, ucfg)
+        intents = decide(snap, ucfg, maker=cfg.execution.maker_mode)
         outstanding = sum(
             (-p.amount for p in snap.short_calls if p.amount < 0), Decimal(0)
         )
         for intent in intents:
             entry["intents"].append(intent.reason)
             try:
-                px = _limit_price(intent.quote, intent.side, 0, cfg.execution.aggression)
+                px = _limit_price(intent.quote, intent.side, 0,
+                                  cfg.execution.aggression,
+                                  maker=cfg.execution.maker_mode)
             except ValueError as exc:
                 entry["vetoed"].append(f"{intent.instrument_name}: {exc}")
                 continue
@@ -259,7 +310,9 @@ def run_cycle(cfg: AgentConfig, venue: Venue, state: StateStore) -> dict:
                 # roll second leg: replacement sell (defensive roll)
                 if intent.replacement is not None:
                     repl = intent.replacement
-                    px2 = _limit_price(repl, Side.SELL, 0, cfg.execution.aggression)
+                    px2 = _limit_price(repl, Side.SELL, 0,
+                                       cfg.execution.aggression,
+                                       maker=cfg.execution.maker_mode)
                     # net-credit re-check against the ACTUAL leg-1 cost: the
                     # replacement quote may have gone stale between snapshot
                     # and now - a credit roll must never become a debit roll.

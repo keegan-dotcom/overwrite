@@ -77,6 +77,11 @@ class ExecutionConfig:
     # first order at mid minus aggression*spread (selling); walks toward bid
     aggression: Decimal = Decimal("0.25")
     post_only: bool = True
+    # maker mode: when the book is empty/one-sided, quote a resting post-only
+    # order at MARK instead of requiring an existing bid. Resting orders are
+    # cancelled and re-quoted at fresh mark each cycle. Essential on quiet
+    # venues (testnet); on mainnet it earns the spread instead of paying it.
+    maker_mode: bool = False
 
 
 @dataclass(frozen=True)

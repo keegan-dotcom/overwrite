@@ -81,3 +81,6 @@ execution:
   max_reprices: 3
   aggression: "0.25"
   post_only: true
+  # Quote resting post-only offers at mark when the book is empty (testnet
+  # books usually are). Also the spread-earning mode for mainnet.
+  maker_mode: true

@@ -79,9 +79,15 @@ def _quote_for(chain: list[OptionQuote], name: str) -> Optional[OptionQuote]:
 
 
 def select_call_to_sell(
-    snap: Snapshot, cfg: UnderlyingConfig
+    snap: Snapshot, cfg: UnderlyingConfig, maker: bool = False
 ) -> Optional[OptionQuote]:
-    """Pick the best call to sell, or None if nothing passes the filters."""
+    """Pick the best call to sell, or None if nothing passes the filters.
+
+    maker=True relaxes the book requirements: quotes with an empty book are
+    acceptable as long as the venue publishes a positive mark (we will quote
+    AT mark, post-only, rather than hit a bid). Delta/DTE/yield floors still
+    apply, with yield measured against mark instead of bid.
+    """
     candidates: list[tuple[Decimal, Decimal, OptionQuote]] = []
     for q in snap.chain:
         if not _is_call(q):
@@ -89,19 +95,27 @@ def select_call_to_sell(
         dte = Decimal(str(q.dte(snap.now_ts)))
         if not (cfg.dte_min <= dte <= cfg.dte_max):
             continue
-        if q.bid is None or q.bid <= 0 or q.ask is None:
-            continue
+        if maker:
+            if q.mark <= 0:
+                continue
+            ref_px = q.mark
+        else:
+            if q.bid is None or q.bid <= 0 or q.ask is None:
+                continue
+            ref_px = q.bid
         if not (cfg.delta_min <= q.delta <= cfg.delta_max):
             continue
         sp = q.spread_pct
-        if sp is None or sp > cfg.max_spread_pct:
+        if not maker and (sp is None or sp > cfg.max_spread_pct):
             continue
+        if maker and sp is not None and sp > cfg.max_spread_pct:
+            continue  # two-sided but too wide: still skip
         if q.open_interest < cfg.min_open_interest:
             continue
         y = Decimal(
             str(
                 annualized_premium_yield(
-                    float(q.bid), float(snap.spot), float(dte)
+                    float(ref_px), float(snap.spot), float(dte)
                 )
             )
         )
@@ -145,7 +159,9 @@ def find_credit_deriser(
     return best
 
 
-def decide(snap: Snapshot, cfg: UnderlyingConfig) -> list[Intent]:
+def decide(
+    snap: Snapshot, cfg: UnderlyingConfig, maker: bool = False
+) -> list[Intent]:
     """One decision pass for one underlying. Returns ordered intents."""
     intents: list[Intent] = []
     now = snap.now_ts or time.time()
@@ -211,7 +227,7 @@ def decide(snap: Snapshot, cfg: UnderlyingConfig) -> list[Intent]:
     capacity = _round_step(capacity, cfg.min_order)
 
     if capacity >= cfg.min_order:
-        q = select_call_to_sell(snap, cfg)
+        q = select_call_to_sell(snap, cfg, maker=maker)
         if q is not None:
             amount = min(capacity, cfg.max_order)
             amount = _round_step(amount, max(q.amount_step, cfg.min_order))
@@ -222,7 +238,7 @@ def decide(snap: Snapshot, cfg: UnderlyingConfig) -> list[Intent]:
                 if amount > 0:
                     dte = q.dte(now)
                     y = annualized_premium_yield(
-                        float(q.bid or 0), float(snap.spot), dte
+                        float(q.bid or q.mark or 0), float(snap.spot), dte
                     )
                     intents.append(
                         Intent(

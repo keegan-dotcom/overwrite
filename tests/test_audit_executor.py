@@ -220,7 +220,7 @@ class TestDefensiveRollLeg2:
             (lambda oid, amt: OrderResult(oid, OrderState.FILLED, amt, D("190")),
              _open, _cancelled),
         ])
-        monkeypatch.setattr(runner_mod, "decide", lambda snap, cfg: [buyback])
+        monkeypatch.setattr(runner_mod, "decide", lambda snap, cfg, **kw: [buyback])
         cfg = make_cfg(tmp_path)
         state = StateStore(cfg.state_db)
         summary = run_cycle(cfg, venue, state)
@@ -251,7 +251,7 @@ class TestDefensiveRollLeg2:
             (lambda oid, amt: OrderResult(oid, OrderState.FILLED, amt, D("197")),
              _open, _cancelled),
         ])
-        monkeypatch.setattr(runner_mod, "decide", lambda snap, cfg: [buyback])
+        monkeypatch.setattr(runner_mod, "decide", lambda snap, cfg, **kw: [buyback])
         cfg = make_cfg(tmp_path)
         summary = run_cycle(cfg, venue, StateStore(cfg.state_db))
         assert len(venue.placements) == 2
