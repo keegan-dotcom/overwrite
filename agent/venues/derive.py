@@ -65,9 +65,26 @@ _STATE_MAP = {
 
 
 def _to_dec(v, default: str = "0") -> Decimal:
+    """Decimal conversion that tolerates None, msgspec UNSET sentinels, and
+    any other non-numeric junk the API hands back. Fails to `default`."""
     if v is None:
         return Decimal(default)
-    return Decimal(str(v))
+    try:
+        return Decimal(str(v))
+    except Exception:
+        return Decimal(default)
+
+
+def _opt_dec(v) -> Optional[Decimal]:
+    """Like _to_dec but returns None for absent/invalid/non-positive values -
+    used for bid/ask where 'no price' must stay None, never 0."""
+    if v is None:
+        return None
+    try:
+        d = Decimal(str(v))
+    except Exception:
+        return None
+    return d if d > 0 else None
 
 
 class DeriveVenue(Venue):
@@ -116,7 +133,11 @@ class DeriveVenue(Venue):
 
     def spot(self, underlying: str) -> Decimal:
         cur = self._client.markets.get_currency(currency=self._currency(underlying))
-        return _to_dec(getattr(cur, "spot_price", None) or getattr(cur, "index_price", None))
+        for field in ("spot_price", "spot_price_24h", "index_price"):
+            px = _opt_dec(getattr(cur, field, None))
+            if px is not None:
+                return px
+        raise ValueError(f"no usable spot price for {underlying}")
 
     def option_chain(self, underlying: str) -> list[OptionQuote]:
         from derive_client.data_types.generated_models import InstrumentType
@@ -148,8 +169,8 @@ class DeriveVenue(Venue):
                         if str(od.option_type).upper().endswith("C")
                         else OptionType.PUT
                     ),
-                    bid=(_to_dec(t.best_bid_price) if t.best_bid_price else None),
-                    ask=(_to_dec(t.best_ask_price) if t.best_ask_price else None),
+                    bid=_opt_dec(t.best_bid_price),
+                    ask=_opt_dec(t.best_ask_price),
                     mark=_to_dec(t.mark_price),
                     delta=_to_dec(op.delta),
                     iv=_to_dec(op.iv),
