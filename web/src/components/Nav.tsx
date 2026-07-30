@@ -3,18 +3,19 @@ import { Link, useLocation } from "react-router-dom";
 import { Logo } from "./Logo";
 
 const links = [
-  { href: "/#yield", label: "Yield" },
-  { href: "/#how", label: "How it works" },
+  { href: "/#yield", label: "The Dial" },
+  { href: "/#how", label: "The Loop" },
   { href: "/#vaults", label: "Vaults" },
-  { href: "/#safety", label: "Safety" },
+  { href: "/#safety", label: "Rails" },
 ];
 
 export function Nav() {
   const [scrolled, setScrolled] = useState(false);
   const { pathname } = useLocation();
+  const onDash = pathname === "/dashboard";
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
+    const onScroll = () => setScrolled(window.scrollY > 12);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -22,39 +23,49 @@ export function Nav() {
 
   return (
     <header
-      className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? "backdrop-blur-md bg-ink/80 border-b border-line"
-          : "bg-transparent border-b border-transparent"
+      className={`fixed inset-x-0 top-0 z-50 border-b-2 transition-colors duration-200 ${
+        onDash
+          ? "border-darkline bg-ink"
+          : scrolled
+          ? "border-ink bg-paper"
+          : "border-ink bg-paper"
       }`}
     >
-      <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
+      <nav className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3">
         <Link to="/" aria-label="Overwrite home">
-          <Logo />
+          <Logo dark={onDash} />
         </Link>
-        <div className="hidden items-center gap-7 text-sm text-fog md:flex">
+        <div
+          className={`hidden items-center gap-7 font-mono text-[13px] uppercase tracking-[0.12em] md:flex ${
+            onDash ? "text-dfog" : "text-fog"
+          }`}
+        >
           {links.map((l) => (
-            <a key={l.href} href={l.href} className="transition-colors hover:text-paper">
+            <a
+              key={l.href}
+              href={l.href}
+              className={`transition-colors ${onDash ? "hover:text-paper" : "hover:text-ink"}`}
+            >
               {l.label}
             </a>
           ))}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 font-mono text-[13px] uppercase tracking-[0.08em]">
           <Link
             to="/dashboard"
-            className={`rounded-full border px-4 py-1.5 text-sm transition-colors ${
-              pathname === "/dashboard"
+            className={`border-2 px-3.5 py-1.5 transition-colors ${
+              onDash
                 ? "border-mint text-mint"
-                : "border-line text-fog hover:border-mint hover:text-mint"
+                : "border-ink text-ink hover:bg-ink hover:text-paper"
             }`}
           >
-            Dashboard
+            Console
           </Link>
           <a
             href="https://testnet.derive.xyz"
             target="_blank"
             rel="noreferrer"
-            className="hidden rounded-full bg-mint px-4 py-1.5 text-sm font-semibold text-ink transition-transform hover:scale-[1.03] sm:block"
+            className="hidden border-2 border-ink bg-accent px-3.5 py-1.5 font-bold text-paper shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px sm:block"
           >
             Run the agent
           </a>

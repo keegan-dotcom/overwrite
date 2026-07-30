@@ -1,6 +1,6 @@
 import { UNDERLYINGS, pct } from "../data/validation";
 
-/** Marquee of gross premium quotes; duplicated track for seamless loop. */
+/** Ticker tape: ink strip, mono figures, like a broadsheet market band. */
 export function Ticker() {
   const items = UNDERLYINGS.map((u) => ({
     label: u.symbol,
@@ -9,14 +9,15 @@ export function Ticker() {
   }));
   const row = [...items, ...items];
   return (
-    <div className="border-y border-line bg-pane/60 py-3 overflow-hidden">
+    <div className="overflow-hidden border-b-2 border-ink bg-ink py-2.5">
       <div className="marquee-track flex w-max items-center gap-10 px-5">
         {row.map((it, i) => (
-          <span key={i} className="flex items-center gap-2.5 font-mono text-sm text-fog">
-            <span className={`h-1.5 w-1.5 rounded-full ${it.live ? "bg-mint live-dot" : "bg-amber"}`} />
-            <span className="text-paper">{it.label}</span>
+          <span key={i} className="flex items-center gap-2.5 font-mono text-[13px] text-dfog">
+            <span className={`inline-block h-2 w-2 ${it.live ? "bg-mint live-dot" : "bg-amber"}`} />
+            <span className="font-bold text-paper">{it.label}</span>
             {it.value}
-            {!it.live && <span className="text-amber/80 text-xs">awaiting listing</span>}
+            {!it.live && <span className="text-amber">· awaiting listing</span>}
+            <span className="text-darkline">///</span>
           </span>
         ))}
       </div>

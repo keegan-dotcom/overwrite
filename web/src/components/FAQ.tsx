@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Reveal } from "./Reveal";
+import { SectionHead } from "./SectionHead";
 
 const faqs = [
   {
     q: "Is the 10% yield real?",
-    a: "As gross option premium: yes, and then some — ETH quotes ~30%/yr and NVDA-class names ~27% at standard settings; SPY is the marginal case at ~10.7%. As guaranteed total return: no such thing exists. Premium is income you collect for selling upside; our validation page shows exactly what that costs in each market regime.",
+    a: "As gross option premium: yes, and then some — ETH quotes ~30%/yr and NVDA-class names ~27% at standard settings; SPY is the marginal case at ~10.7%. As guaranteed total return: no such thing exists. Premium is income you collect for selling upside; our validation shows exactly what that costs in each market regime.",
   },
   {
     q: "Can the agent lose my keys or withdraw my funds?",
@@ -16,7 +17,7 @@ const faqs = [
   },
   {
     q: "When do the stock vaults go live?",
-    a: "The day Derive lists tokenized-stock options. Derive's founder has outlined an RWA expansion covering equities, and its first RWA market (tokenized gold) shipped in July 2026. AAPL/NVDA/TSLA/SPY parameters are already tuned and disabled behind one config flag. Until listing, we don't quote a date, because nobody has confirmed one.",
+    a: "The day Derive lists tokenized-stock options. Derive's founder has outlined an RWA expansion covering equities, and its first RWA market (tokenized gold) shipped in July 2026. AAPL/NVDA/TSLA/SPY parameters are already tuned behind one config flag. Until listing, we don't quote a date, because nobody has confirmed one.",
   },
   {
     q: "Can US users deposit?",
@@ -31,30 +32,36 @@ const faqs = [
 export function FAQ() {
   const [open, setOpen] = useState<number | null>(0);
   return (
-    <section className="border-t border-line bg-pane/40 py-28">
+    <section className="border-t-2 border-ink bg-cream py-24">
       <div className="mx-auto max-w-3xl px-5">
-        <Reveal>
-          <h2 className="font-display text-4xl font-light tracking-tight sm:text-5xl">
-            Questions people actually ask<span className="text-mint">.</span>
-          </h2>
-        </Reveal>
-        <div className="mt-10 divide-y divide-line rounded-2xl border border-line bg-ink">
+        <SectionHead
+          no="06"
+          kicker="Correspondence"
+          title={<>Questions people actually ask<span className="text-accent">.</span></>}
+        />
+        <div className="mt-10 border-2 border-ink bg-paper shadow-hard">
           {faqs.map((f, i) => (
-            <div key={f.q}>
+            <div key={f.q} className={i > 0 ? "border-t-2 border-ink" : ""}>
               <button
                 onClick={() => setOpen(open === i ? null : i)}
-                className="flex w-full items-center justify-between gap-6 px-6 py-5 text-left"
+                className="flex w-full items-center justify-between gap-6 px-6 py-4 text-left transition-colors hover:bg-cream"
                 aria-expanded={open === i}
               >
-                <span className="font-medium text-paper">{f.q}</span>
-                <span className={`font-mono text-mint transition-transform ${open === i ? "rotate-45" : ""}`}>+</span>
+                <span className="font-serif text-lg font-semibold">{f.q}</span>
+                <span
+                  className={`font-mono text-xl font-bold text-accent transition-transform ${
+                    open === i ? "rotate-45" : ""
+                  }`}
+                >
+                  +
+                </span>
               </button>
               <div
                 className="grid transition-all duration-300 ease-out"
                 style={{ gridTemplateRows: open === i ? "1fr" : "0fr" }}
               >
                 <div className="overflow-hidden">
-                  <p className="px-6 pb-6 text-sm leading-relaxed text-fog">{f.a}</p>
+                  <p className="px-6 pb-6 font-serif text-[15px] leading-relaxed text-ink/75">{f.a}</p>
                 </div>
               </div>
             </div>

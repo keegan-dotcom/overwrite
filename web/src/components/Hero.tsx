@@ -1,134 +1,126 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Reveal } from "./Reveal";
 import { UNDERLYINGS, pct } from "../data/validation";
 
-/** Parallax orbs follow scroll + mouse subtly. */
-function useParallax() {
-  const ref = useRef<HTMLDivElement>(null);
+const TYPED = ["ETH", "BTC", "AAPL", "NVDA", "TSLA", "SPY"];
+
+/** Typewriter: types each symbol, holds, deletes - OVR mode made literal. */
+function useTypewriter(words: string[], typeMs = 110, holdMs = 1400) {
+  const [text, setText] = useState("");
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    let raf = 0;
-    let mx = 0, my = 0, sy = 0;
-    const update = () => {
-      raf = 0;
-      el.querySelectorAll<HTMLElement>("[data-depth]").forEach((orb) => {
-        const d = parseFloat(orb.dataset.depth || "0.1");
-        orb.style.transform = `translate3d(${mx * 40 * d}px, ${sy * -120 * d + my * 30 * d}px, 0)`;
-      });
+    let word = 0, len = 0, deleting = false, t: number;
+    const tick = () => {
+      const w = words[word];
+      len += deleting ? -1 : 1;
+      setText(w.slice(0, len));
+      let delay = deleting ? typeMs / 2 : typeMs;
+      if (!deleting && len === w.length) { deleting = true; delay = holdMs; }
+      else if (deleting && len === 0) { deleting = false; word = (word + 1) % words.length; delay = 350; }
+      t = window.setTimeout(tick, delay);
     };
-    const onMouse = (e: MouseEvent) => {
-      mx = e.clientX / window.innerWidth - 0.5;
-      my = e.clientY / window.innerHeight - 0.5;
-      if (!raf) raf = requestAnimationFrame(update);
-    };
-    const onScroll = () => {
-      sy = Math.min(1, window.scrollY / 900);
-      if (!raf) raf = requestAnimationFrame(update);
-    };
-    window.addEventListener("mousemove", onMouse, { passive: true });
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      window.removeEventListener("mousemove", onMouse);
-      window.removeEventListener("scroll", onScroll);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, []);
-  return ref;
+    t = window.setTimeout(tick, 600);
+    return () => window.clearTimeout(t);
+  }, [words, typeMs, holdMs]);
+  return text;
 }
 
 export function Hero() {
-  const ref = useParallax();
+  const typed = useTypewriter(TYPED);
   const eth = UNDERLYINGS[0];
 
   return (
-    <section
-      ref={ref}
-      className="relative flex min-h-[92vh] items-center overflow-hidden pt-24"
-    >
-      <div className="grid-backdrop absolute inset-0" aria-hidden />
-      <div
-        className="orb h-[420px] w-[420px] bg-mint/15 left-[-120px] top-[10%]"
-        data-depth="0.25"
-        aria-hidden
-      />
-      <div
-        className="orb h-[520px] w-[520px] bg-mintdim/10 right-[-160px] top-[30%]"
-        data-depth="0.45"
-        aria-hidden
-      />
-      <div
-        className="orb h-[260px] w-[260px] bg-amber/10 left-[45%] bottom-[-80px]"
-        data-depth="0.7"
-        aria-hidden
-      />
+    <section className="grain border-b-2 border-ink pt-[58px]">
+      <div className="mx-auto max-w-6xl px-5">
+        {/* masthead strip */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line py-2 font-mono text-[11px] uppercase tracking-[0.14em] text-fog">
+          <span>Vol. 1 — The Covered-Call Paper</span>
+          <span className="flex items-center gap-2">
+            <span className="live-dot inline-block h-2 w-2 bg-market" />
+            Live on Derive testnet · equities-ready
+          </span>
+          <span className="hidden sm:block">Est. 2026 · A Selby Studio experiment</span>
+        </div>
 
-      <div className="relative mx-auto grid max-w-6xl gap-14 px-5 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
-        <div>
-          <Reveal>
-            <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-line bg-pane px-3.5 py-1.5 text-xs tracking-wide text-fog">
-              <span className="live-dot h-1.5 w-1.5 rounded-full bg-mint" />
-              LIVE ON DERIVE TESTNET · EQUITIES-READY FOR V3
-            </p>
-          </Reveal>
-          <Reveal delay={1}>
-            <h1 className="font-display text-5xl font-light leading-[1.04] tracking-tight sm:text-6xl lg:text-[4.6rem]">
-              Idle assets are{" "}
-              <em className="not-italic text-mint">unsold options.</em>
-            </h1>
-          </Reveal>
-          <Reveal delay={2}>
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-fog">
-              Overwrite is an autonomous agent that sells covered calls against
-              what you already hold — systematically, on-chain, on{" "}
-              <a
-                href="https://derive.xyz"
-                target="_blank"
-                rel="noreferrer"
-                className="text-paper underline decoration-mint/40 underline-offset-4 hover:decoration-mint"
-              >
-                Derive
-              </a>
-              . ETH and BTC today. Your Apple stock the day tokenized equities
-              list.
-            </p>
-          </Reveal>
-          <Reveal delay={3}>
-            <div className="mt-9 flex flex-wrap items-center gap-4">
-              <a
-                href="#yield"
-                className="rounded-full bg-mint px-6 py-3 font-semibold text-ink transition-transform hover:scale-[1.03]"
-              >
-                See the honest numbers
-              </a>
-              <Link
-                to="/dashboard"
-                className="rounded-full border border-line px-6 py-3 text-paper transition-colors hover:border-mint hover:text-mint"
-              >
-                Watch it trade →
-              </Link>
+        <div className="grid gap-10 py-14 lg:grid-cols-[1.15fr_0.85fr] lg:gap-14">
+          {/* headline column */}
+          <div>
+            <Reveal>
+              <p className="mb-6 inline-block border-2 border-ink bg-ink px-3 py-1 font-mono text-[12px] uppercase tracking-[0.2em] text-paper">
+                MODE: <span className="text-accent font-bold">OVR</span> — insert is for buyers
+              </p>
+            </Reveal>
+            <Reveal delay={1}>
+              <h1 className="font-display text-[17vw] uppercase leading-[0.92] tracking-[0.01em] sm:text-7xl lg:text-[6.2rem]">
+                Don't just{" "}
+                <span className="strike text-fog">hold</span>
+                <br />
+                <span className="text-accent">overwrite</span>
+                <br />
+                your {typed}
+                <span className="cursor-block ml-1" aria-hidden />
+              </h1>
+            </Reveal>
+            <Reveal delay={2}>
+              <p className="mt-8 max-w-xl font-serif text-xl leading-relaxed text-ink/85">
+                Overwrite is an autonomous agent that sells covered calls against
+                what you already hold — systematically, on-chain, on{" "}
+                <a
+                  href="https://derive.xyz"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline decoration-accent decoration-2 underline-offset-4"
+                >
+                  Derive
+                </a>
+                . ETH and BTC today. Your Apple stock the day tokenized equities list.
+              </p>
+            </Reveal>
+            <Reveal delay={3}>
+              <div className="mt-9 flex flex-wrap items-center gap-4 font-mono text-sm uppercase tracking-[0.06em]">
+                <a
+                  href="#yield"
+                  className="border-2 border-ink bg-accent px-6 py-3 font-bold text-paper shadow-hard transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
+                >
+                  See the honest numbers
+                </a>
+                <Link
+                  to="/dashboard"
+                  className="border-2 border-ink bg-paper px-6 py-3 text-ink shadow-hard transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
+                >
+                  Watch it trade →
+                </Link>
+              </div>
+            </Reveal>
+          </div>
+
+          {/* order ticket */}
+          <Reveal delay={2} className="hidden lg:block">
+            <div className="regmarks ticket ticket-accent -rotate-1 p-6">
+              <div className="flex items-baseline justify-between border-b-2 border-ink pb-3 font-mono text-[12px] uppercase tracking-[0.1em]">
+                <span className="font-bold">Sell ticket № 0001</span>
+                <span className="text-accent font-bold">gross {pct(eth.gross.d25, 0)}/yr</span>
+              </div>
+              <div className="flex justify-between border-b border-line py-2.5 font-mono text-[13px]">
+                <span className="text-fog">UNDERLYING</span><span>ETH · covered</span>
+              </div>
+              <div className="flex justify-between border-b border-line py-2.5 font-mono text-[13px]">
+                <span className="text-fog">DELTA / DTE</span><span>0.25Δ · 35 days</span>
+              </div>
+              <div className="flex justify-between border-b border-line py-2.5 font-mono text-[13px]">
+                <span className="text-fog">ORDER TYPE</span><span>limit only. always.</span>
+              </div>
+              <PayoffSketch />
+              <p className="mt-4 border-t-2 border-ink pt-3 font-serif text-[15px] leading-relaxed text-ink/80">
+                Premium in every cycle. Upside capped past the strike — priced,
+                not hidden. Downside stays yours.{" "}
+                <a href="#honest" className="underline decoration-accent decoration-2 underline-offset-2">
+                  Read why that matters.
+                </a>
+              </p>
             </div>
           </Reveal>
         </div>
-
-        {/* payoff card */}
-        <Reveal delay={2} className="hidden lg:block">
-          <div className="rounded-2xl border border-line bg-pane/80 p-6 backdrop-blur">
-            <div className="flex items-baseline justify-between">
-              <span className="font-mono text-xs text-fog">ETH · 0.25Δ · 35 DTE</span>
-              <span className="font-mono text-xs text-mint">gross {pct(eth.gross.d25, 0)}/yr</span>
-            </div>
-            <PayoffSketch />
-            <p className="mt-4 text-sm leading-relaxed text-fog">
-              Premium in every cycle. Upside capped past the strike — priced,
-              not hidden. Downside stays yours.{" "}
-              <a href="#honest" className="text-paper underline decoration-mint/40 underline-offset-4">
-                Read why that matters.
-              </a>
-            </p>
-          </div>
-        </Reveal>
       </div>
     </section>
   );
@@ -136,29 +128,20 @@ export function Hero() {
 
 function PayoffSketch() {
   return (
-    <svg viewBox="0 0 320 150" className="mt-4 w-full" aria-label="Covered call payoff diagram">
-      <defs>
-        <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#3DFFA8" stopOpacity="0.25" />
-          <stop offset="100%" stopColor="#3DFFA8" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {/* axis */}
-      <line x1="16" y1="120" x2="304" y2="120" stroke="#1E2A26" strokeWidth="1.5" />
-      <line x1="16" y1="16" x2="16" y2="120" stroke="#1E2A26" strokeWidth="1.5" />
+    <svg viewBox="0 0 320 140" className="mt-4 w-full" aria-label="Covered call payoff diagram">
+      {/* axes */}
+      <line x1="14" y1="116" x2="306" y2="116" stroke="#161513" strokeWidth="2" />
+      <line x1="14" y1="12" x2="14" y2="116" stroke="#161513" strokeWidth="2" />
       {/* buy-and-hold */}
-      <path d="M16 120 L 290 30" stroke="#8FA89C" strokeWidth="1.5" strokeDasharray="5 5" fill="none" />
-      {/* covered call: shifted up by premium, capped at strike */}
-      <path d="M16 104 L 190 44 L 304 44" stroke="#3DFFA8" strokeWidth="3" fill="none" strokeLinecap="round" />
-      <path d="M16 104 L 190 44 L 304 44 L 304 120 L 16 120 Z" fill="url(#fade)" />
-      {/* strike marker */}
-      <line x1="190" y1="44" x2="190" y2="120" stroke="#3DFFA8" strokeWidth="1" strokeDasharray="3 4" opacity="0.5" />
-      <text x="190" y="138" textAnchor="middle" fill="#8FA89C" fontSize="10" fontFamily="IBM Plex Mono">strike</text>
-      <text x="288" y="26" textAnchor="end" fill="#8FA89C" fontSize="10" fontFamily="IBM Plex Mono">hold</text>
-      <text x="296" y="60" textAnchor="end" fill="#3DFFA8" fontSize="10" fontFamily="IBM Plex Mono">overwrite</text>
-      {/* premium bracket */}
-      <line x1="10" y1="104" x2="10" y2="120" stroke="#FFB84D" strokeWidth="2" />
-      <text x="24" y="100" fill="#FFB84D" fontSize="10" fontFamily="IBM Plex Mono">premium</text>
+      <path d="M14 116 L 292 26" stroke="#6E6A5E" strokeWidth="1.5" strokeDasharray="6 5" fill="none" />
+      {/* covered call */}
+      <path d="M14 100 L 190 40 L 306 40" stroke="#E8450A" strokeWidth="4" fill="none" strokeLinecap="square" />
+      <line x1="190" y1="40" x2="190" y2="116" stroke="#161513" strokeWidth="1" strokeDasharray="2 4" />
+      <text x="190" y="132" textAnchor="middle" fill="#6E6A5E" fontSize="11" fontFamily="Courier Prime">strike</text>
+      <text x="290" y="20" textAnchor="end" fill="#6E6A5E" fontSize="11" fontFamily="Courier Prime">hold</text>
+      <text x="300" y="56" textAnchor="end" fill="#E8450A" fontSize="11" fontFamily="Courier Prime" fontWeight="bold">overwrite</text>
+      <line x1="8" y1="100" x2="8" y2="116" stroke="#0E7C3F" strokeWidth="3" />
+      <text x="22" y="97" fill="#0E7C3F" fontSize="11" fontFamily="Courier Prime">premium</text>
     </svg>
   );
 }

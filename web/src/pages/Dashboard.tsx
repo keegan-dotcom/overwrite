@@ -44,16 +44,16 @@ export function Dashboard() {
   );
 
   return (
-    <main className="mx-auto max-w-6xl px-5 pb-24 pt-28">
+    <main className="min-h-screen bg-ink pb-24 pt-28 text-paper"><div className="mx-auto max-w-6xl px-5">
       <Reveal>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="font-display text-4xl font-light tracking-tight">Operator console</h1>
-            <p className="mt-2 font-mono text-xs text-fog">
+            <h1 className="font-display text-4xl uppercase">Operator console</h1>
+            <p className="mt-2 font-mono text-xs text-dfog">
               venue=derive-testnet · subaccount #demo · cycle 900s
             </p>
           </div>
-          <span className="rounded-full border border-amber/50 bg-amber/10 px-4 py-1.5 font-mono text-xs text-amber">
+          <span className="rounded-none border border-amber/50 bg-amber/10 px-4 py-1.5 font-mono text-xs text-amber">
             DEMO DATA — connect your agent (see below)
           </span>
         </div>
@@ -72,9 +72,9 @@ export function Dashboard() {
 
       {/* equity sparkline */}
       <Reveal delay={2}>
-        <div className="mt-6 rounded-2xl border border-line bg-pane p-6">
+        <div className="mt-6 rounded-none border border-darkline bg-pane p-6">
           <div className="flex items-baseline justify-between">
-            <p className="font-mono text-xs text-fog">EQUITY (INDEXED, 12 CYCLES)</p>
+            <p className="font-mono text-xs text-dfog">EQUITY (INDEXED, 12 CYCLES)</p>
             <p className="font-mono text-xs text-mint">103.4</p>
           </div>
           <Sparkline data={EQUITY} />
@@ -87,35 +87,35 @@ export function Dashboard() {
           <div className="flex gap-2">
             {(["positions", "ledger", "log"] as const).map((t) => (
               <button key={t} onClick={() => setTab(t)}
-                className={`rounded-full border px-4 py-1.5 font-mono text-xs uppercase tracking-wider transition-colors ${
-                  tab === t ? "border-mint bg-mint/10 text-mint" : "border-line text-fog hover:border-fog"
+                className={`rounded-none border px-4 py-1.5 font-mono text-xs uppercase tracking-wider transition-colors ${
+                  tab === t ? "border-mint bg-mint/10 text-mint" : "border-darkline text-dfog hover:border-fog"
                 }`}>
                 {t}
               </button>
             ))}
           </div>
 
-          <div className="thin-scroll mt-4 overflow-x-auto rounded-2xl border border-line bg-pane">
+          <div className="thin-scroll mt-4 overflow-x-auto rounded-none border border-darkline bg-pane">
             {tab === "positions" && (
               <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="border-b border-line font-mono text-[11px] uppercase tracking-wider text-fog">
+                <thead className="border-b border-darkline font-mono text-[11px] uppercase tracking-wider text-dfog">
                   <tr>{["instrument", "size", "entry", "mark", "Δ", "dte", "premium captured"].map((h) => (
                     <th key={h} className="px-5 py-3 font-medium">{h}</th>
                   ))}</tr>
                 </thead>
                 <tbody className="font-mono">
                   {DEMO_POSITIONS.map((p) => (
-                    <tr key={p.instrument} className="border-b border-line/50 last:border-0 hover:bg-ink/50">
+                    <tr key={p.instrument} className="border-b border-darkline/50 last:border-0 hover:bg-ink/50">
                       <td className="px-5 py-3.5 text-paper">{p.instrument}</td>
                       <td className="px-5 py-3.5 text-rose">{p.size.toFixed(1)}</td>
-                      <td className="px-5 py-3.5 text-fog">{p.entry.toFixed(1)}</td>
-                      <td className="px-5 py-3.5 text-fog">{p.mark.toFixed(1)}</td>
-                      <td className="px-5 py-3.5 text-fog">{p.delta.toFixed(2)}</td>
-                      <td className="px-5 py-3.5 text-fog">{p.dte.toFixed(1)}d</td>
+                      <td className="px-5 py-3.5 text-dfog">{p.entry.toFixed(1)}</td>
+                      <td className="px-5 py-3.5 text-dfog">{p.mark.toFixed(1)}</td>
+                      <td className="px-5 py-3.5 text-dfog">{p.delta.toFixed(2)}</td>
+                      <td className="px-5 py-3.5 text-dfog">{p.dte.toFixed(1)}d</td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-2">
-                          <div className="h-1.5 w-24 overflow-hidden rounded-full bg-line">
-                            <div className="h-full rounded-full bg-mint" style={{ width: `${Math.min(100, ((p.entry - p.mark) / p.entry) * 100)}%` }} />
+                          <div className="h-1.5 w-24 overflow-hidden rounded-none bg-darkline">
+                            <div className="h-full rounded-none bg-mint" style={{ width: `${Math.min(100, ((p.entry - p.mark) / p.entry) * 100)}%` }} />
                           </div>
                           <span className="text-mint">{(((p.entry - p.mark) / p.entry) * 100).toFixed(0)}%</span>
                         </div>
@@ -127,15 +127,15 @@ export function Dashboard() {
             )}
             {tab === "ledger" && (
               <table className="w-full min-w-[560px] text-left text-sm">
-                <thead className="border-b border-line font-mono text-[11px] uppercase tracking-wider text-fog">
+                <thead className="border-b border-darkline font-mono text-[11px] uppercase tracking-wider text-dfog">
                   <tr>{["time", "kind", "instrument", "usd"].map((h) => (
                     <th key={h} className="px-5 py-3 font-medium">{h}</th>
                   ))}</tr>
                 </thead>
                 <tbody className="font-mono">
                   {DEMO_LEDGER.map((l, i) => (
-                    <tr key={i} className="border-b border-line/50 last:border-0 hover:bg-ink/50">
-                      <td className="px-5 py-3.5 text-fog">{l.ts}</td>
+                    <tr key={i} className="border-b border-darkline/50 last:border-0 hover:bg-ink/50">
+                      <td className="px-5 py-3.5 text-dfog">{l.ts}</td>
                       <td className="px-5 py-3.5">
                         <span className={l.kind === "premium_in" ? "text-mint" : "text-amber"}>{l.kind}</span>
                       </td>
@@ -151,8 +151,8 @@ export function Dashboard() {
             {tab === "log" && (
               <div className="p-5 font-mono text-sm">
                 {DEMO_CYCLES.map((c, i) => (
-                  <p key={i} className="border-b border-line/40 py-2.5 last:border-0">
-                    <span className="text-fog">{c.ts}</span>{" "}
+                  <p key={i} className="border-b border-darkline/40 py-2.5 last:border-0">
+                    <span className="text-dfog">{c.ts}</span>{" "}
                     <span className={c.msg.includes("VETO") ? "text-amber" : c.msg.includes("FILLED") ? "text-mint" : "text-paper/80"}>
                       {c.msg}
                     </span>
@@ -165,29 +165,29 @@ export function Dashboard() {
       </Reveal>
 
       <Reveal>
-        <div className="mt-10 rounded-2xl border border-line bg-pane p-6">
-          <p className="font-mono text-xs uppercase tracking-widest text-fog">Connect your agent</p>
-          <p className="mt-3 text-sm leading-relaxed text-fog">
+        <div className="mt-10 rounded-none border border-darkline bg-pane p-6">
+          <p className="font-mono text-xs uppercase tracking-widest text-dfog">Connect your agent</p>
+          <p className="mt-3 text-sm leading-relaxed text-dfog">
             This console renders demo shapes. Your running agent already records
             everything it does — positions, ledger, cycles, equity — to{" "}
-            <code className="rounded bg-ink px-1.5 py-0.5 text-mintdim">data/overwrite.db</code>. Export it:
+            <code className="rounded bg-ink px-1.5 py-0.5 text-mint">data/overwrite.db</code>. Export it:
           </p>
-          <pre className="mt-4 overflow-x-auto rounded-xl border border-line bg-ink p-4 font-mono text-xs text-paper/90">
+          <pre className="mt-4 overflow-x-auto rounded-xl border border-darkline bg-ink p-4 font-mono text-xs text-paper/90">
 {`python -m agent.main status --config configs/config.yaml > web/public/status.json
 # then point the dashboard at /status.json (see web/README.md)`}
           </pre>
         </div>
       </Reveal>
-    </main>
+    </div></main>
   );
 }
 
 function Card({ label, value, foot, accent }: { label: string; value: string; foot: string; accent: string }) {
   return (
-    <div className="rounded-2xl border border-line bg-pane p-6">
-      <p className={`font-display text-3xl font-light ${accent}`}>{value}</p>
+    <div className="rounded-none border border-darkline bg-pane p-6">
+      <p className={`font-display text-3xl ${accent}`}>{value}</p>
       <p className="mt-2 text-sm text-paper">{label}</p>
-      <p className="mt-1 font-mono text-[11px] text-fog">{foot}</p>
+      <p className="mt-1 font-mono text-[11px] text-dfog">{foot}</p>
     </div>
   );
 }
