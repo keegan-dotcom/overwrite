@@ -4,6 +4,7 @@ import { Nav } from "./components/Nav";
 import { Footer } from "./components/Footer";
 import { Landing } from "./pages/Landing";
 import { Dashboard } from "./pages/Dashboard";
+import { AppDemo } from "./pages/AppDemo";
 
 function ScrollManager() {
   const { pathname, hash } = useLocation();
@@ -25,6 +26,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/app" element={<AppDemo />} />
       </Routes>
       <Footer />
     </>

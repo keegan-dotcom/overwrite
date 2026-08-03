@@ -53,6 +53,16 @@ export function Nav() {
         </div>
         <div className="flex items-center gap-3 font-mono text-[13px] uppercase tracking-[0.08em]">
           <Link
+            to="/app"
+            className={`border-2 px-3.5 py-1.5 transition-colors ${
+              pathname === "/app"
+                ? "border-mint text-mint"
+                : "border-paper text-paper hover:border-mint hover:text-mint"
+            }`}
+          >
+            App
+          </Link>
+          <Link
             to="/dashboard"
             className={`border-2 px-3.5 py-1.5 transition-colors ${
               onDash
