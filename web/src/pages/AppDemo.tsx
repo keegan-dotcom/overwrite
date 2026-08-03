@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { asset, strategy, Quote, DEMO_PORTFOLIO, roundStrike } from "../data/appdata";
+import { asset, strategy, Quote, DEMO_PORTFOLIO, roundStrike, ASSETS, STRATEGIES, IntentParams } from "../data/appdata";
 import { callPrice, strikeForYield, fmtUsd, fmtPct } from "../lib/options";
 import { parseIntent } from "../lib/intent";
 import { VaultPanel } from "../components/app/VaultPanel";
@@ -13,6 +13,49 @@ const now = () =>
   new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
 const holdingQty = (sym: string) => DEMO_PORTFOLIO.find((h) => h.symbol === sym)?.qty ?? 1;
+
+type IncomingIntent = {
+  symbol: string;
+  strategyId: string;
+  params: Partial<IntentParams>;
+  understood: string[];
+  reply?: string;
+};
+
+/**
+ * Ask the LLM seat (/api/intent) to parse the message. Returns null when the
+ * endpoint is unconfigured, rate-limited, slow (>9s) or returns anything that
+ * doesn't validate - the caller then falls back to the offline parser, so the
+ * demo always works.
+ */
+async function fetchLlmIntent(message: string, lastIntent: unknown): Promise<IncomingIntent | null> {
+  try {
+    const ctrl = new AbortController();
+    const to = window.setTimeout(() => ctrl.abort(), 9000);
+    const r = await fetch("/api/intent", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ message, lastIntent }),
+      signal: ctrl.signal,
+    });
+    window.clearTimeout(to);
+    if (!r.ok || !(r.headers.get("content-type") || "").includes("application/json")) return null;
+    const j = await r.json();
+    if (!j || typeof j !== "object") return null;
+    if (!ASSETS.some((a) => a.symbol === j.symbol)) return null;
+    if (!STRATEGIES.some((s) => s.id === j.strategyId)) return null;
+    const p = (j.params && typeof j.params === "object" ? j.params : {}) as Partial<IntentParams>;
+    return {
+      symbol: j.symbol,
+      strategyId: j.strategyId,
+      params: p,
+      understood: Array.isArray(j.understood) ? j.understood.filter((x: unknown) => typeof x === "string").slice(0, 6) : [],
+      reply: typeof j.reply === "string" ? j.reply : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
 
 const HELLO: ChatMsg = {
   role: "agent",
@@ -68,11 +111,52 @@ export function AppDemo() {
     return q;
   }, []);
 
+  /** Structure the intent, run the honesty check, post the agent's reply. */
+  const applyIntent = useCallback((p: IncomingIntent) => {
+    lastIntent.current = { symbol: p.symbol, strategyId: p.strategyId, params: p.params as Record<string, unknown> };
+    const s = strategy(p.strategyId);
+    const q = structure(p.symbol, p.strategyId, p.params, true);
+    const a = asset(p.symbol);
+
+    // honesty check (always in code, never delegated to the model):
+    // does the requested cap actually pay the requested yield?
+    let conflict = "";
+    const wantY = p.params.targetYieldAnnual;
+    if (p.strategyId === "income" && wantY != null && p.params.capTarget != null &&
+        q.incomeAnnualPct < wantY * 0.8) {
+      const kAlt = strikeForYield(a.spot, wantY, a.iv, q.dte / 365);
+      conflict = kAlt
+        ? ` One thing you should know: a cap at ${fmtUsd(p.params.capTarget)} only pays ~${fmtPct(q.incomeAnnualPct, 1)}/yr. To actually earn ${fmtPct(wantY, 0)}, the cap has to come down to about ${fmtUsd(roundStrike(kAlt, a))}. Your call - say "hit my yield target" and I'll restructure.`
+        : ` One thing you should know: ${fmtPct(wantY, 0)}/yr isn't reachable on ${p.symbol} at today's volatility, even selling at-the-money. The ticket shows what your cap really pays.`;
+    }
+
+    const lead = p.reply
+      ? p.reply
+      : `Here's what I built - ${s.name} (${s.proName}) on your ${holdingQty(p.symbol).toLocaleString()} ${p.symbol}.`;
+    setMessages((m) => [
+      ...m,
+      {
+        role: "agent",
+        text: `${lead} ${q.headline}${conflict} ${a.live ? "Approve the ticket and I take over the management loop." : "This asset lists on Derive soon - the ticket is a preview you can pre-approve."}`,
+        bullets: p.understood,
+      },
+    ]);
+  }, [structure]);
+
   const onSend = useCallback((text: string) => {
     setMessages((m) => [...m, { role: "user", text }]);
     setThinking(true);
-    later(700, () => {
-      // follow-up: "hit my yield target" → drop the cap, solve for yield
+    void (async () => {
+      // LLM seat first (real intent understanding when ANTHROPIC_API_KEY is set)
+      const llm = await fetchLlmIntent(text, lastIntent.current);
+      if (llm) {
+        setThinking(false);
+        applyIntent(llm);
+        return;
+      }
+
+      // offline fallback: deterministic parser (the demo always works)
+      // follow-up special-case: "hit my yield target" → drop the cap
       if (/hit my yield|yield target|restructure/i.test(text) && lastIntent.current?.params["targetYieldAnnual"] != null) {
         const li = lastIntent.current;
         const params = { ...li.params, capTarget: null };
@@ -89,33 +173,10 @@ export function AppDemo() {
         return;
       }
       const p = parseIntent(text.toLowerCase());
-      lastIntent.current = { symbol: p.symbol, strategyId: p.strategyId, params: p.params as Record<string, unknown> };
-      const s = strategy(p.strategyId);
-      const q = structure(p.symbol, p.strategyId, p.params, true);
-      const a = asset(p.symbol);
       setThinking(false);
-
-      // honesty check: does the requested cap actually pay the requested yield?
-      let conflict = "";
-      const wantY = p.params.targetYieldAnnual;
-      if (p.strategyId === "income" && wantY != null && p.params.capTarget != null &&
-          q.incomeAnnualPct < wantY * 0.8) {
-        const kAlt = strikeForYield(a.spot, wantY, a.iv, q.dte / 365);
-        conflict = kAlt
-          ? ` One thing you should know: a cap at ${fmtUsd(p.params.capTarget)} only pays ~${fmtPct(q.incomeAnnualPct, 1)}/yr. To actually earn ${fmtPct(wantY, 0)}, the cap has to come down to about ${fmtUsd(roundStrike(kAlt, a))}. Your call - say "hit my yield target" and I'll restructure.`
-          : ` One thing you should know: ${fmtPct(wantY, 0)}/yr isn't reachable on ${p.symbol} at today's volatility, even selling at-the-money. The ticket shows what your cap really pays.`;
-      }
-
-      setMessages((m) => [
-        ...m,
-        {
-          role: "agent",
-          text: `Here's what I built - ${s.name} (${s.proName}) on your ${holdingQty(p.symbol).toLocaleString()} ${p.symbol}. ${q.headline} Every tradeoff is spelled out on the ticket.${conflict} ${a.live ? "Approve it there and I take over the management loop." : "This asset lists on Derive soon - the ticket is a preview you can pre-approve."}`,
-          bullets: p.understood,
-        },
-      ]);
-    });
-  }, [structure]);
+      applyIntent({ symbol: p.symbol, strategyId: p.strategyId, params: p.params, understood: p.understood });
+    })();
+  }, [structure, applyIntent]);
 
   const onDeploy = useCallback(() => {
     if (!ticket) return;

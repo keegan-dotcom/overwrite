@@ -39,12 +39,12 @@ export function PayoffChart({ q }: { q: Quote }) {
   const zeroY = Y(0);
   const areaPath = `${path} L${X(model.hi).toFixed(1)},${zeroY.toFixed(1)} L${X(model.lo).toFixed(1)},${zeroY.toFixed(1)} Z`;
 
-  const marker = (px: number, label: string, color: string, leftSide = false) => (
+  const marker = (px: number, label: string, color: string, leftSide = false, row = 0) => (
     <g key={label}>
       <line x1={X(px)} x2={X(px)} y1={PAD} y2={H - PAD} stroke={color} strokeWidth="1" strokeDasharray="3 4" opacity="0.7" />
       <text
         x={leftSide ? X(px) - 4 : X(px) + 4}
-        y={PAD + 11}
+        y={PAD + 11 + row * 13}
         textAnchor={leftSide ? "end" : "start"}
         fill={color} fontSize="10" fontFamily="'Courier Prime', monospace"
       >
@@ -75,7 +75,7 @@ export function PayoffChart({ q }: { q: Quote }) {
       {/* markers */}
       {marker(a.spot, "now", "#E9F2EC", true)}
       {q.capPrice != null && marker(q.capPrice, "cap", "#FFB84D")}
-      {q.floorPrice != null && marker(q.floorPrice, "floor", "#3DFFA8")}
+      {q.floorPrice != null && marker(q.floorPrice, "floor", "#3DFFA8", true, 1)}
       {holdPath && (
         <text x={W - PAD - 4} y={H - PAD - 6} textAnchor="end" fill="#8FA89C" fontSize="10" fontFamily="'Courier Prime', monospace">
           - - just holding
