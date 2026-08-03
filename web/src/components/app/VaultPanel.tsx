@@ -1,4 +1,4 @@
-import { ASSETS, DEMO_PORTFOLIO, asset } from "../../data/appdata";
+import { DEMO_PORTFOLIO, asset } from "../../data/appdata";
 import { fmtUsd } from "../../lib/options";
 import type { Position } from "./types";
 
@@ -52,21 +52,6 @@ export function VaultPanel({
             </button>
           );
         })}
-        {ASSETS.filter((a) => !DEMO_PORTFOLIO.some((h) => h.symbol === a.symbol)).map((a) => (
-          <button
-            key={a.symbol}
-            onClick={() => onSelect(a.symbol)}
-            className={`flex w-full items-center justify-between px-4 py-2 text-left opacity-60 transition-colors ${
-              selected === a.symbol ? "bg-ink opacity-100" : "hover:bg-ink/60 hover:opacity-90"
-            }`}
-          >
-            <div className="font-mono text-[12px] text-fog">
-              {a.symbol}
-              {!a.live && <span className="ml-2 text-[10px] uppercase text-amber">soon</span>}
-            </div>
-            <div className="font-mono text-[11px] text-fog">not held</div>
-          </button>
-        ))}
       </div>
 
       <div className="border-t-2 border-line px-4 py-2.5 font-serif text-[12px] leading-snug text-fog">

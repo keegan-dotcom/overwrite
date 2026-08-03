@@ -57,6 +57,35 @@ async function fetchLlmIntent(message: string, lastIntent: unknown): Promise<Inc
   }
 }
 
+function AssetStrip({ selected, onSelect }: { selected: string; onSelect: (s: string) => void }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {ASSETS.map((a) => {
+        const on = a.symbol === selected;
+        return (
+          <button
+            key={a.symbol}
+            onClick={() => onSelect(a.symbol)}
+            className={`border-2 px-3 py-1.5 font-mono text-[12px] transition-colors ${
+              on
+                ? "border-mint bg-pane text-mint"
+                : a.live
+                ? "border-line text-paper hover:border-fog"
+                : "border-line text-fog hover:border-fog"
+            }`}
+            aria-pressed={on}
+          >
+            <span className="font-bold">{a.symbol}</span>
+            <span className={`ml-2 ${on ? "text-mint/70" : "text-fog"}`}>{fmtUsd(a.spot)}</span>
+            {on && <span className="ml-2 text-mint/70">IV {fmtPct(a.iv, 0)}</span>}
+            {!a.live && <span className="ml-2 text-[9px] uppercase tracking-[0.08em] text-amber">soon</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 const HELLO: ChatMsg = {
   role: "agent",
   text: "I manage options strategies from your own isolated vault. Tell me what you want in plain English - an income target, a price you'd happily sell at, a floor you won't go below - and I'll structure the trade, show you every tradeoff, and run it until you say otherwise.",
@@ -87,7 +116,7 @@ export function AppDemo() {
     timers.current.push(window.setTimeout(fn, ms));
   };
 
-  const structure = useCallback((sym: string, stratId: string, params = {}, fromChat = false) => {
+  const structure = useCallback((sym: string, stratId: string, params = {}, mode: "shelf" | "chat" | "silent" = "shelf") => {
     const a = asset(sym);
     const s = strategy(stratId);
     const q = s.quote(a, params);
@@ -97,25 +126,36 @@ export function AppDemo() {
     setTicket(q);
     setTicketQty(qty);
     setDeployedTicket(false);
-    if (!fromChat) {
+    if (mode === "shelf") {
       setMessages((m) => [
         ...m,
         {
           role: "agent",
-          text: `Structured ${s.name} on your ${qty.toLocaleString()} ${sym}. ${q.headline} The full ticket - payoff, tradeoffs, what I'll manage - is on the left. Tweak it here: "make the cap $${Math.round((q.capPrice ?? a.spot * 1.2)).toLocaleString()}" or "add a 15% stop".`,
+          text: `Structured ${s.name} on your ${qty.toLocaleString()} ${sym}. ${q.headline} The full ticket - payoff, tradeoffs, what I'll manage - is below the strategies. Tweak it here: ${q.capPrice != null ? `"make the cap $${Math.round(q.capPrice * 1.05).toLocaleString()}" or ` : ""}"add a 15% stop" - or just say what you'd change.`,
         },
       ]);
     }
-    // scroll ticket into view on small screens
-    later(60, () => ticketRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+    if (mode !== "silent") {
+      // scroll ticket into view on small screens
+      later(60, () => ticketRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+    }
     return q;
   }, []);
+
+  // the page opens composed: default strategy on the default asset
+  useEffect(() => {
+    structure("BTC", "income", {}, "silent");
+  }, [structure]);
+
+  const onSelectAsset = useCallback((sym: string) => {
+    structure(sym, pickedId ?? "income", {}, "silent");
+  }, [structure, pickedId]);
 
   /** Structure the intent, run the honesty check, post the agent's reply. */
   const applyIntent = useCallback((p: IncomingIntent) => {
     lastIntent.current = { symbol: p.symbol, strategyId: p.strategyId, params: p.params as Record<string, unknown> };
     const s = strategy(p.strategyId);
-    const q = structure(p.symbol, p.strategyId, p.params, true);
+    const q = structure(p.symbol, p.strategyId, p.params, "chat");
     const a = asset(p.symbol);
 
     // honesty check (always in code, never delegated to the model):
@@ -161,7 +201,7 @@ export function AppDemo() {
         const li = lastIntent.current;
         const params = { ...li.params, capTarget: null };
         lastIntent.current = { ...li, params };
-        const q2 = structure(li.symbol, li.strategyId, params, true);
+        const q2 = structure(li.symbol, li.strategyId, params, "chat");
         setThinking(false);
         setMessages((m) => [
           ...m,
@@ -269,33 +309,19 @@ export function AppDemo() {
         <div className="grid gap-4 lg:grid-cols-12">
           {/* left: vault + feed */}
           <div className="space-y-4 lg:col-span-3">
-            <VaultPanel selected={selected} onSelect={(s) => { setSelected(s); setPickedId(null); }} positions={positions} />
+            <VaultPanel selected={selected} onSelect={onSelectAsset} positions={positions} />
             <div className="hidden lg:block">
               <AgentFeed positions={positions} feed={feed} suggestion={suggestion} onAccept={onAccept} onDismiss={onDismiss} />
             </div>
           </div>
 
-          {/* center: shelf + ticket */}
-          <div className="space-y-4 lg:col-span-5">
-            <div>
-              <div className="mb-2 flex items-baseline justify-between">
-                <div className="font-mono text-[11px] uppercase tracking-[0.14em] text-fog">
-                  Off the shelf · {selected}
-                </div>
-                <div className="font-mono text-[11px] text-fog">
-                  spot {fmtUsd(asset(selected).spot)} · IV {fmtPct(asset(selected).iv, 0)}
-                </div>
-              </div>
-              <StrategyShelf symbol={selected} activeId={pickedId} onPick={(id) => structure(selected, id)} />
-            </div>
+          {/* center: the workbench - asset, strategy, ticket */}
+          <div className="space-y-3 lg:col-span-5">
+            <AssetStrip selected={selected} onSelect={onSelectAsset} />
+            <StrategyShelf symbol={selected} activeId={pickedId} onPick={(id) => structure(selected, id)} />
             <div ref={ticketRef}>
-              {ticket ? (
+              {ticket && (
                 <TradeTicket q={ticket} qty={ticketQty} onDeploy={onDeploy} deployed={deployedTicket} />
-              ) : (
-                <div className="border-2 border-dashed border-line px-6 py-10 text-center font-serif text-[14px] italic text-fog">
-                  Pick a strategy above - or tell the agent what you want →
-                  <br />The structured trade appears here with every number and every tradeoff.
-                </div>
               )}
             </div>
           </div>
