@@ -4,7 +4,7 @@
  * so the numbers respond to real user targets - nothing is canned.
  */
 import {
-  Leg, annualYield, callPrice, putPrice, strikeForDelta, strikeForYield, fmtUsd, fmtPct,
+  Leg, annualYield, callPrice, putPrice, callDelta, strikeForDelta, strikeForYield, fmtUsd, fmtPct,
 } from "../lib/options";
 
 export type Asset = {
@@ -55,6 +55,7 @@ export type Quote = {
   headline: string;        // the one-line outcome
   tradeoffs: string[];     // plain-english full disclosure
   managed: string[];       // what the agent does automatically
+  hedgeNote?: string;      // extra structured-as line (e.g. the perp hedge)
 };
 
 export type Strategy = {
@@ -234,6 +235,45 @@ function bearQuote(a: Asset, o: Partial<IntentParams> = {}): Quote {
   };
 }
 
+function neutralQuote(a: Asset, o: Partial<IntentParams> = {}): Quote {
+  const p = { ...DEF, ...o };
+  const t = p.dte / 365;
+  let k: number;
+  if (p.capTarget != null) {
+    k = p.capTarget;
+  } else if (o.targetYieldAnnual != null) {
+    k = strikeForYield(a.spot, o.targetYieldAnnual, a.iv, t) ?? strikeForDelta(a.spot, 0.25, a.iv, t);
+  } else {
+    k = strikeForDelta(a.spot, 0.25, a.iv, t);
+  }
+  k = roundStrike(Math.max(k, a.spot * 1.01), a);
+  const prem = callPrice(a.spot, k, a.iv, t);
+  const yld = annualYield(prem, a.spot, p.dte);
+  const dCall = callDelta(a.spot, k, a.iv, t);
+  const hedge = 1 - dCall; // perps shorted per unit to neutralize the covered call
+  return {
+    strategyId: "neutral", assetSymbol: a.symbol, title: `Stay Neutral · ${a.symbol}`,
+    legs: [{ kind: "call", side: "short", strike: k, premium: prem, qty: 1 }],
+    // net linear exposure after the perp hedge = the call's delta
+    assetQty: dCall, dte: p.dte,
+    incomeMonthly: prem, incomeAnnualPct: yld, capPrice: k, floorPrice: null,
+    stopLossPct: p.stopLossPct,
+    hedgeNote: `SHORT ${a.symbol} PERP ×${hedge.toFixed(2)}/unit (delta hedge, re-balanced as it drifts)`,
+    headline: `Earn ~${fmtPct(yld, 1)}/yr in premium with roughly zero exposure to ${a.symbol}'s price - the direction is hedged out with perps.`,
+    tradeoffs: [
+      "This is a yield position, not a bet: you don't lose much if it dumps, and you don't make much if it rips. The premium is the whole point.",
+      "Neutral at entry, not every second: between re-hedges a sharp move costs a little (the curvature in the payoff). That drag is the price of neutrality.",
+      "Perp funding can cost or pay - it swings with the market and the agent nets it into your reported yield.",
+      p.stopLossPct ? `Auto-close: everything unwinds if the position is down ${fmtPct(p.stopLossPct, 0)}.` : "No stop-loss set - add one in chat ('close if down 10%').",
+    ],
+    managed: [
+      `Shorts ~${hedge.toFixed(2)} perps/unit at entry, re-hedges when net delta drifts past 0.05`,
+      "Re-sells a call each cycle · take-profit at 75% decay · rolls at 21 DTE",
+      "Watches funding: unwinds the hedge if funding turns punitive and tells you why",
+    ],
+  };
+}
+
 export const STRATEGIES: Strategy[] = [
   { id: "income", name: "Income Mode", emoji: "💰", proName: "covered call",
     tagline: "Earn yield on what you hold. Upside capped past your target.",
@@ -255,6 +295,10 @@ export const STRATEGIES: Strategy[] = [
     tagline: "Bet on a fall with strictly capped risk. No liquidations.",
     fitsWhen: "You think it drops but won't risk a short squeeze.",
     risk: "spicy", quote: bearQuote },
+  { id: "neutral", name: "Stay Neutral", emoji: "⚖️", proName: "delta-hedged covered call",
+    tagline: "Pure income, no market view - direction hedged with perps.",
+    fitsWhen: "You want the yield without betting on price.",
+    risk: "moderate", quote: neutralQuote },
 ];
 
 export const strategy = (id: string) => STRATEGIES.find((s) => s.id === id)!;

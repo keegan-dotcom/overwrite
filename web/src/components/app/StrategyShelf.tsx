@@ -29,7 +29,7 @@ export function StrategyShelf({
 
   return (
     <div className="border-2 border-line bg-pane">
-      <div className="grid grid-cols-2 sm:grid-cols-5">
+      <div className="grid grid-cols-2 sm:grid-cols-3">
         {STRATEGIES.map((s, i) => {
           const q = s.quote(a);
           const picked = activeId === s.id;
@@ -39,13 +39,18 @@ export function StrategyShelf({
               : q.floorPrice != null
               ? `floor ${fmtUsd(q.floorPrice)}`
               : "capped risk";
+          const n = STRATEGIES.length;
+          const borders = [
+            i % 2 === 0 ? "border-r-2" : "border-r-0",              // mobile: 2-col
+            i < n - 2 ? "border-b-2" : "border-b-0",                // mobile: last row
+            (i + 1) % 3 !== 0 ? "sm:border-r-2" : "sm:border-r-0",  // sm+: 3-col
+            i < n - 3 ? "sm:border-b-2" : "sm:border-b-0",          // sm+: last row
+          ].join(" ");
           return (
             <button
               key={s.id}
               onClick={() => onPick(s.id)}
-              className={`flex flex-col items-center gap-1 border-b-2 border-line px-2 py-3 transition-colors sm:border-b-0 ${
-                i < STRATEGIES.length - 1 ? "sm:border-r-2" : ""
-              } ${i % 2 === 0 ? "border-r-2 sm:border-r-2" : ""} ${
+              className={`flex flex-col items-center gap-1 border-line px-2 py-3 transition-colors ${borders} ${
                 picked
                   ? "bg-ink shadow-[inset_0_-2px_0_0_#3DFFA8]"
                   : "hover:bg-ink/60"

@@ -42,6 +42,8 @@ function detectAsset(text: string): string | null {
 
 function detectStrategy(text: string): string {
   const has = (...ws: string[]) => ws.some((w) => text.includes(w));
+  if (has("neutral", "no view", "no direction", "without betting", "not betting", "don't care which way", "dont care which way", "either way", "hedge the delta", "delta hedge", "just the yield", "pure income", "pure yield"))
+    return "neutral";
   if (has("collar", "lock the range", "range", "zero cost", "free insurance", "cost nothing", "pay for itself"))
     return "collar";
   if (has("protect", "hedge", "insurance", "floor", "crash", "shield", "downside", "can't lose", "cant lose", "stop the bleeding"))
@@ -131,6 +133,7 @@ export const SUGGESTED_PROMPTS = [
   "Lock my HYPE in a range that costs nothing",
   "Get paid to buy the ETH dip",
   "Short HYPE with capped risk",
+  "Earn yield on my BTC without betting on the price",
 ];
 
 export function assetOf(sym: string): Asset {

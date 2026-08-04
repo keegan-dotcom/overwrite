@@ -1,13 +1,17 @@
 """Overwrite agent CLI.
 
+    python -m agent.main preflight --config configs/config.example.yaml
     python -m agent.main run --config configs/config.example.yaml
     python -m agent.main once --config ... [--live]
     python -m agent.main status --config ...
     python -m agent.main close-all --config ... --live
 
-Safety model:
+Safety model (two-stage go-live):
   * dry_run defaults to TRUE in config; `--live` is required ON TOP of
     dry_run: false in YAML to place real orders (belt and suspenders).
+  * `preflight` runs a guided inspection (env, venue, margin, balances,
+    chains) and stamps data/PREFLIGHT_OK; --live runs refuse to start
+    without a stamp fresher than 24h (--skip-preflight to bypass).
   * touch data/KILL to hard-stop all trading; data/PAUSE to stop new sells.
 """
 from __future__ import annotations
@@ -153,6 +157,24 @@ def cmd_close_all(cfg: AgentConfig) -> None:
                   executor.execute(intent))
 
 
+def cmd_preflight(cfg: AgentConfig) -> int:
+    """Guided go-live inspection; writes PREFLIGHT_OK stamp on success."""
+    from .preflight import preflight_ok, render, run_preflight, write_stamp
+
+    print(f"overwrite preflight · venue={cfg.venue} · dry_run={cfg.dry_run}\n")
+    checks = run_preflight(cfg, build_venue)
+    print(render(checks))
+    if preflight_ok(checks):
+        stamp = write_stamp(cfg, checks)
+        warns = sum(1 for c in checks if c.level == "warn")
+        print(f"\nPREFLIGHT PASSED ({warns} warning(s)) — stamp written: {stamp}")
+        print("Live trading unlocked for 24h:")
+        print("  python -m agent.main run --config <cfg> --live   (needs dry_run: false in YAML)")
+        return 0
+    print("\nPREFLIGHT FAILED — fix the ✗ items above and re-run. No stamp written.")
+    return 1
+
+
 def cmd_export_status(cfg: AgentConfig, out: str | None) -> None:
     """Offline status.json export from the state DB (positions omitted)."""
     from .export import export_status
@@ -167,17 +189,34 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="overwrite")
     ap.add_argument("command",
                     choices=["run", "once", "status", "close-all",
-                             "export-status"])
+                             "export-status", "preflight"])
     ap.add_argument("--config", default="configs/config.example.yaml")
     ap.add_argument("--out", default=None,
                     help="output path for export-status")
     ap.add_argument("--live", action="store_true",
                     help="allow real orders (requires dry_run: false in YAML too)")
+    ap.add_argument("--skip-preflight", action="store_true",
+                    help="bypass the PREFLIGHT_OK freshness gate for --live runs")
     args = ap.parse_args(argv)
 
     cfg = load_config(args.config)
     cfg = _effective_config(cfg, args.live)
     _setup_logging(cfg.log_dir)
+
+    if args.command == "preflight":
+        return cmd_preflight(cfg)
+
+    # Two-stage go-live: actually-live runs require a fresh preflight stamp.
+    if not cfg.dry_run and args.command in ("run", "once", "close-all") \
+            and not args.skip_preflight:
+        from .preflight import stamp_fresh, stamp_path
+
+        if not stamp_fresh(cfg):
+            print("REFUSED: live trading requires a preflight stamp fresher than "
+                  f"24h ({stamp_path(cfg)} missing or stale).")
+            print("Run:  python -m agent.main preflight --config", args.config)
+            print("(or --skip-preflight to bypass — not recommended)")
+            return 2
 
     if args.command == "run":
         cmd_run(cfg)

@@ -74,6 +74,12 @@ export function TradeTicket({
               </span>
             </div>
           ))}
+          {q.hedgeNote && (
+            <div className="flex justify-between text-mint">
+              <span>{q.hedgeNote}</span>
+              <span className="text-fog">delta ≈ 0</span>
+            </div>
+          )}
           {q.stopLossPct != null && (
             <div className="flex justify-between text-rose">
               <span>AUTO-CLOSE</span>
