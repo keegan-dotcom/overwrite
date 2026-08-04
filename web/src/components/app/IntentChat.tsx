@@ -3,11 +3,12 @@ import { SUGGESTED_PROMPTS } from "../../lib/intent";
 import type { ChatMsg } from "./types";
 
 export function IntentChat({
-  messages, onSend, thinking,
+  messages, onSend, thinking, defaultsNote,
 }: {
   messages: ChatMsg[];
   onSend: (text: string) => void;
   thinking: boolean;
+  defaultsNote?: string | null;
 }) {
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -30,8 +31,13 @@ export function IntentChat({
           Tell the agent what you want
         </div>
         <div className="font-serif text-[12.5px] italic text-fog">
-          No greeks needed. Plain English in, structured trade out.
+          No greeks needed. A good ask: <span className="not-italic font-mono text-[11px]">asset + goal + limits + horizon</span>
         </div>
+        {defaultsNote && (
+          <div className="mt-1 inline-block border border-mint/40 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-mint">
+            remembers you: {defaultsNote}
+          </div>
+        )}
       </div>
 
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
@@ -88,7 +94,7 @@ export function IntentChat({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
-          placeholder='e.g. "earn 12% on my ETH, sell above $4,500"'
+          placeholder='"ETH · 12% yield · stop at 15% · monthly"'
           className="min-w-0 flex-1 border-2 border-line bg-ink px-3 py-2 font-mono text-[13px] text-paper placeholder:text-fog/60 focus:border-mint focus:outline-none"
         />
         <button

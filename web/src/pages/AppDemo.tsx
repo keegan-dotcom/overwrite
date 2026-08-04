@@ -14,6 +14,28 @@ const now = () =>
 
 const holdingQty = (sym: string) => DEMO_PORTFOLIO.find((h) => h.symbol === sym)?.qty ?? 1;
 
+/* Preference memory: the agent remembers your risk defaults across visits.
+ * Explicit prompt values always win; saved defaults fill the gaps. */
+type Prefs = { stopLossPct?: number; dte?: number };
+const PREFS_KEY = "overwrite_defaults";
+const loadPrefs = (): Prefs => {
+  try { return JSON.parse(window.localStorage.getItem(PREFS_KEY) || "{}"); }
+  catch { return {}; }
+};
+const savePrefs = (p: Prefs) => {
+  try { window.localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch { /* private mode */ }
+};
+const clearPrefs = () => {
+  try { window.localStorage.removeItem(PREFS_KEY); } catch { /* private mode */ }
+};
+const prefsNote = (p: Prefs): string | null => {
+  const bits = [
+    p.stopLossPct != null ? `${(p.stopLossPct * 100).toFixed(0)}% auto-close` : null,
+    p.dte != null ? `${p.dte}d horizon` : null,
+  ].filter(Boolean);
+  return bits.length ? bits.join(" · ") : null;
+};
+
 type IncomingIntent = {
   symbol: string;
   strategyId: string;
@@ -106,6 +128,13 @@ export function AppDemo() {
   const ticketRef = useRef<HTMLDivElement>(null);
   const idRef = useRef(1);
   const lastIntent = useRef<{ symbol: string; strategyId: string; params: Record<string, unknown> } | null>(null);
+  const prefsRef = useRef<Prefs>({});
+  const [defaultsNote, setDefaultsNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    prefsRef.current = loadPrefs();
+    setDefaultsNote(prefsNote(prefsRef.current));
+  }, []);
 
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
@@ -116,10 +145,12 @@ export function AppDemo() {
     timers.current.push(window.setTimeout(fn, ms));
   };
 
-  const structure = useCallback((sym: string, stratId: string, params = {}, mode: "shelf" | "chat" | "silent" = "shelf") => {
+  const structure = useCallback((sym: string, stratId: string, params: Partial<IntentParams> = {}, mode: "shelf" | "chat" | "silent" = "shelf") => {
     const a = asset(sym);
     const s = strategy(stratId);
-    const q = s.quote(a, params);
+    // saved defaults fill gaps; anything explicit wins
+    const merged = { ...prefsRef.current, ...params };
+    const q = s.quote(a, merged);
     const qty = holdingQty(sym);
     setSelected(sym);
     setPickedId(stratId);
@@ -154,6 +185,22 @@ export function AppDemo() {
   /** Structure the intent, run the honesty check, post the agent's reply. */
   const applyIntent = useCallback((p: IncomingIntent) => {
     lastIntent.current = { symbol: p.symbol, strategyId: p.strategyId, params: p.params as Record<string, unknown> };
+
+    // preference memory: risk limits you state once become your defaults
+    const remembered: string[] = [];
+    if (p.params.stopLossPct != null && p.params.stopLossPct !== prefsRef.current.stopLossPct) {
+      prefsRef.current = { ...prefsRef.current, stopLossPct: p.params.stopLossPct };
+      remembered.push(`auto-close ${(p.params.stopLossPct * 100).toFixed(0)}%`);
+    }
+    if (p.params.dte != null && p.params.dte !== prefsRef.current.dte) {
+      prefsRef.current = { ...prefsRef.current, dte: p.params.dte };
+      remembered.push(`${p.params.dte}d horizon`);
+    }
+    if (remembered.length) {
+      savePrefs(prefsRef.current);
+      setDefaultsNote(prefsNote(prefsRef.current));
+    }
+
     const s = strategy(p.strategyId);
     const q = structure(p.symbol, p.strategyId, p.params, "chat");
     const a = asset(p.symbol);
@@ -178,7 +225,9 @@ export function AppDemo() {
       {
         role: "agent",
         text: `${lead} ${q.headline}${conflict} ${a.live ? "Approve the ticket and I take over the management loop." : "This asset lists on Derive soon - the ticket is a preview you can pre-approve."}`,
-        bullets: p.understood,
+        bullets: remembered.length
+          ? [...p.understood, `Saved as your default: ${remembered.join(", ")} (say "clear my defaults" to reset)`]
+          : p.understood,
       },
     ]);
   }, [structure]);
@@ -187,6 +236,19 @@ export function AppDemo() {
     setMessages((m) => [...m, { role: "user", text }]);
     setThinking(true);
     void (async () => {
+      // preference memory reset - handled locally, no model needed
+      if (/clear (my )?defaults|forget (my )?defaults|reset (my )?defaults/i.test(text)) {
+        prefsRef.current = {};
+        clearPrefs();
+        setDefaultsNote(null);
+        setThinking(false);
+        setMessages((m) => [
+          ...m,
+          { role: "agent", text: "Done - defaults cleared. New trades go back to standard settings until you state new limits." },
+        ]);
+        return;
+      }
+
       // LLM seat first (real intent understanding when ANTHROPIC_API_KEY is set)
       const llm = await fetchLlmIntent(text, lastIntent.current);
       if (llm) {
@@ -329,7 +391,7 @@ export function AppDemo() {
           {/* right: chat */}
           <div className="lg:col-span-4">
             <div className="lg:sticky lg:top-20">
-              <IntentChat messages={messages} onSend={onSend} thinking={thinking} />
+              <IntentChat messages={messages} onSend={onSend} thinking={thinking} defaultsNote={defaultsNote} />
             </div>
           </div>
 
