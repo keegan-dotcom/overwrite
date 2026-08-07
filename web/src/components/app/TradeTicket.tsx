@@ -1,22 +1,26 @@
 import { Quote, asset, strategy } from "../../data/appdata";
 import { fmtUsd, fmtPct } from "../../lib/options";
 import { PayoffChart } from "./PayoffChart";
+import { VENUES, VenueMode } from "../../data/venues";
 
 /**
  * The structured trade: what the intent engine built, disclosed in full.
  * No greeks required - but the real strikes/premiums are all here.
  */
 export function TradeTicket({
-  q, qty, onDeploy, deployed,
+  q, qty, onDeploy, deployed, venueMode = "v2",
 }: {
   q: Quote;
   qty: number;
   onDeploy: () => void;
   deployed: boolean;
+  venueMode?: VenueMode;
 }) {
   const a = asset(q.assetSymbol);
   const s = strategy(q.strategyId);
+  const v = VENUES[venueMode];
   const income = q.incomeMonthly * qty;
+  const managed = [...q.managed, ...v.extraManaged];
 
   return (
     <div className="border-2 border-mint bg-pane shadow-hard">
@@ -108,7 +112,7 @@ export function TradeTicket({
             The agent handles
           </div>
           <ul className="space-y-1.5 font-serif text-[13px] leading-snug text-paper/90">
-            {q.managed.map((x, i) => (
+            {managed.map((x, i) => (
               <li key={i} className="flex gap-2">
                 <span className="text-mint">✓</span><span>{x}</span>
               </li>
@@ -120,6 +124,9 @@ export function TradeTicket({
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div className="font-mono text-[11px] uppercase tracking-[0.12em] text-fog">
           Executes from YOUR isolated vault · funds never pooled
+          <span className="block text-[10px] normal-case tracking-normal text-fog/80">
+            {v.keyScope} · {v.settlement}
+          </span>
         </div>
         <button
           onClick={onDeploy}

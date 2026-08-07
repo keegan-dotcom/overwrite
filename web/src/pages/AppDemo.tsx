@@ -3,6 +3,8 @@ import { asset, strategy, Quote, DEMO_PORTFOLIO, roundStrike, ASSETS, STRATEGIES
 import { callPrice, strikeForYield, fmtUsd, fmtPct } from "../lib/options";
 import { parseIntent } from "../lib/intent";
 import { VaultPanel } from "../components/app/VaultPanel";
+import { RunItYourself } from "../components/app/RunItYourself";
+import { VENUES, VenueMode } from "../data/venues";
 import { StrategyShelf } from "../components/app/StrategyShelf";
 import { TradeTicket } from "../components/app/TradeTicket";
 import { IntentChat } from "../components/app/IntentChat";
@@ -130,6 +132,7 @@ export function AppDemo() {
   const lastIntent = useRef<{ symbol: string; strategyId: string; params: Record<string, unknown> } | null>(null);
   const prefsRef = useRef<Prefs>({});
   const [defaultsNote, setDefaultsNote] = useState<string | null>(null);
+  const [venueMode, setVenueMode] = useState<VenueMode>("v2");
 
   useEffect(() => {
     prefsRef.current = loadPrefs();
@@ -297,14 +300,16 @@ export function AppDemo() {
       ...m,
       {
         role: "agent",
-        text: `Deployed from your vault. I'm running it now - take-profits, rolls, and market reactions are automatic, and I'll ping you before anything changes shape. Watch the management feed, or just close this tab; that's the point.`,
+        text: `Deployed from your vault. I'm running it now - take-profits, rolls, and market reactions are automatic, and I'll ping you before anything changes shape. Prefer your own machine? A "Run it yourself" panel just appeared under the ticket - download the generated config and run the open-source agent from your terminal.`,
       },
     ]);
 
     const leg = ticket.legs[0];
     pushFeed("action", `deploy: ${leg.side === "short" ? "SELL" : "BUY"} ${ticket.assetSymbol} ${fmtUsd(leg.strike)} ${leg.kind.toUpperCase()} ×${(leg.qty * qty).toLocaleString()} → post-only at mark`);
     later(2200, () => pushFeed("info", `filled · ${ticket.incomeMonthly >= 0 ? "premium banked" : "cost paid"}: ${fmtUsd(Math.abs(ticket.incomeMonthly * qty), 0)}`));
-    later(4600, () => pushFeed("info", `monitoring · IV ${fmtPct(a.iv, 0)} · margin use 8% · all rails green`));
+    VENUES[venueMode].settleStages.forEach((stage, i) =>
+      later(3200 + i * 1100, () => pushFeed("info", stage)));
+    later(5800, () => pushFeed("info", `monitoring · IV ${fmtPct(a.iv, 0)} · margin use 8% · all rails green`));
 
     // market-reaction suggestion
     later(9000, () => {
@@ -329,7 +334,7 @@ export function AppDemo() {
         });
       }
     });
-  }, [ticket, ticketQty]);
+  }, [ticket, ticketQty, venueMode]);
 
   const onAccept = useCallback(() => {
     if (!suggestion) return;
@@ -362,16 +367,28 @@ export function AppDemo() {
               isolated vault.
             </p>
           </div>
-          <div className="flex flex-col items-end gap-1 font-mono text-[10.5px] uppercase tracking-[0.12em]">
+          <div className="flex flex-col items-end gap-1.5 font-mono text-[10.5px] uppercase tracking-[0.12em]">
             <span className="border-2 border-amber px-2 py-0.5 text-amber">demo · simulated pricing</span>
-            <span className="text-fog">venue: Derive · BTC ETH HYPE live · equities on listing</span>
+            <label className="flex items-center gap-2 text-fog">
+              venue
+              <select
+                value={venueMode}
+                onChange={(e) => setVenueMode(e.target.value as VenueMode)}
+                className="border-2 border-line bg-ink px-2 py-1 font-mono text-[11px] uppercase tracking-[0.08em] text-mint focus:border-mint focus:outline-none"
+              >
+                {Object.values(VENUES).map((v) => (
+                  <option key={v.id} value={v.id}>{v.label}</option>
+                ))}
+              </select>
+            </label>
+            <span className="text-fog">{VENUES[venueMode].endpoint} · BTC ETH HYPE live · equities on listing</span>
           </div>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-12">
           {/* left: vault + feed */}
           <div className="space-y-4 lg:col-span-3">
-            <VaultPanel selected={selected} onSelect={onSelectAsset} positions={positions} />
+            <VaultPanel selected={selected} onSelect={onSelectAsset} positions={positions} vaultNote={VENUES[venueMode].vaultNote} />
             <div className="hidden lg:block">
               <AgentFeed positions={positions} feed={feed} suggestion={suggestion} onAccept={onAccept} onDismiss={onDismiss} />
             </div>
@@ -381,9 +398,12 @@ export function AppDemo() {
           <div className="space-y-3 lg:col-span-5">
             <AssetStrip selected={selected} onSelect={onSelectAsset} />
             <StrategyShelf symbol={selected} activeId={pickedId} onPick={(id) => structure(selected, id)} />
-            <div ref={ticketRef}>
+            <div ref={ticketRef} className="space-y-3">
               {ticket && (
-                <TradeTicket q={ticket} qty={ticketQty} onDeploy={onDeploy} deployed={deployedTicket} />
+                <TradeTicket q={ticket} qty={ticketQty} onDeploy={onDeploy} deployed={deployedTicket} venueMode={venueMode} />
+              )}
+              {ticket && deployedTicket && (
+                <RunItYourself q={ticket} qty={ticketQty} mode={venueMode} />
               )}
             </div>
           </div>

@@ -3,11 +3,12 @@ import { fmtUsd } from "../../lib/options";
 import type { Position } from "./types";
 
 export function VaultPanel({
-  selected, onSelect, positions,
+  selected, onSelect, positions, vaultNote,
 }: {
   selected: string;
   onSelect: (sym: string) => void;
   positions: Position[];
+  vaultNote?: string;
 }) {
   const total = DEMO_PORTFOLIO.reduce((s, h) => s + h.qty * asset(h.symbol).spot, 0);
 
@@ -55,8 +56,7 @@ export function VaultPanel({
       </div>
 
       <div className="border-t-2 border-line px-4 py-2.5 font-serif text-[12px] leading-snug text-fog">
-        One vault per user. No pooled funds, no shared honeypot - a hack of
-        someone else's vault can't touch yours.
+        {vaultNote ?? "One vault per user. No pooled funds, no shared honeypot - a hack of someone else's vault can't touch yours."}
       </div>
     </div>
   );
