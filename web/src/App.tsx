@@ -1,9 +1,8 @@
 import { useEffect } from "react";
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Nav } from "./components/Nav";
 import { Footer } from "./components/Footer";
 import { Landing } from "./pages/Landing";
-import { Dashboard } from "./pages/Dashboard";
 import { AppDemo } from "./pages/AppDemo";
 
 function ScrollManager() {
@@ -25,7 +24,7 @@ export default function App() {
       <Nav />
       <Routes>
         <Route path="/" element={<Landing />} />
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Navigate to="/app" replace />} />
         <Route path="/app" element={<AppDemo />} />
       </Routes>
       <Footer />

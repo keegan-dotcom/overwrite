@@ -6,6 +6,7 @@ import { parseIntent } from "../lib/intent";
 import { VaultPanel } from "../components/app/VaultPanel";
 import { RunItYourself } from "../components/app/RunItYourself";
 import { TestnetPanel } from "../components/app/TestnetPanel";
+import { Dashboard } from "./Dashboard";
 import { VENUES, VenueMode } from "../data/venues";
 import { StrategyShelf } from "../components/app/StrategyShelf";
 import { TradeTicket } from "../components/app/TradeTicket";
@@ -136,6 +137,7 @@ export function AppDemo() {
   const [defaultsNote, setDefaultsNote] = useState<string | null>(null);
   const [venueMode, setVenueMode] = useState<VenueMode>("v2");
   const [wallet, setWallet] = useState<WalletState | null>(null);
+  const [view, setView] = useState<"trade" | "console">("trade");
   const portfolio: Holding[] =
     wallet && wallet.holdings.length ? wallet.holdings : DEMO_PORTFOLIO;
   const portfolioRef = useRef<Holding[]>(DEMO_PORTFOLIO);
@@ -430,7 +432,25 @@ export function AppDemo() {
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-12">
+        {/* view switch: the one app holds both the trade desk and the console */}
+        <div className="mb-5 flex gap-0 border-2 border-line bg-pane font-mono text-[12px] uppercase tracking-[0.1em]">
+          {([["trade", "Trade desk"], ["console", "Agent console"]] as const).map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => setView(id)}
+              aria-pressed={view === id}
+              className={`flex-1 border-r-2 border-line px-4 py-2.5 transition-colors last:border-r-0 ${
+                view === id ? "bg-ink font-bold text-mint shadow-[inset_0_-2px_0_0_#3DFFA8]" : "text-fog hover:bg-ink/60 hover:text-paper"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {view === "console" && <Dashboard embedded />}
+
+        <div className={view === "trade" ? "grid gap-4 lg:grid-cols-12" : "hidden"}>
           {/* left: vault + feed */}
           <div className="space-y-4 lg:col-span-3">
             <VaultPanel selected={selected} onSelect={onSelectAsset} positions={positions} vaultNote={VENUES[venueMode].vaultNote} holdings={portfolio} usdc={wallet?.usdc ?? 0} walletLabel={wallet && wallet.holdings.length ? shortAddr(wallet.address) : null} />

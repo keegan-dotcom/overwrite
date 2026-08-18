@@ -32,7 +32,7 @@ export function Safety() {
   return (
     <section id="safety" className="mx-auto max-w-6xl px-5 py-24">
       <SectionHead
-        no="05"
+        no="03"
         kicker="The rails"
         title={<>Paranoia, productized<span className="text-accent">.</span></>}
       />

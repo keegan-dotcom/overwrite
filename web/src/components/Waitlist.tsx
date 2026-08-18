@@ -43,7 +43,7 @@ export function Waitlist() {
     <section id="waitlist" className="border-t-2 border-paper bg-ink py-24">
       <div className="mx-auto max-w-3xl px-5">
         <SectionHead
-          no="07"
+          no="04"
           kicker="Coming next"
           title={<>Don't want to run a terminal? <span className="text-accent">Join the hosted list.</span></>}
         >

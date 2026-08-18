@@ -16,9 +16,8 @@ export function Footer() {
             <div>
               <p className="border-b border-darkline pb-2 text-[11px] uppercase tracking-[0.2em] text-dfog">Product</p>
               <ul className="mt-3 space-y-2">
-                <li><a className="hover:text-accent" href="/#yield">The dial</a></li>
-                <li><a className="hover:text-accent" href="/#vaults">Vaults</a></li>
-                <li><a className="hover:text-accent" href="/dashboard">Console</a></li>
+                <li><a className="hover:text-accent" href="/app">The app</a></li>
+                <li><a className="hover:text-accent" href="/#products">The products</a></li>
                 <li><a className="hover:text-accent" href="/#waitlist">Hosted waitlist</a></li>
               </ul>
             </div>
@@ -35,7 +34,7 @@ export function Footer() {
               <ul className="mt-3 space-y-2">
                 <li><a className="hover:text-accent" href="https://derive.xyz" target="_blank" rel="noreferrer">Derive ↗</a></li>
                 <li><a className="hover:text-accent" href="https://docs.derive.xyz" target="_blank" rel="noreferrer">Derive docs ↗</a></li>
-                <li><a className="hover:text-accent" href="https://github.com" target="_blank" rel="noreferrer">GitHub ↗</a></li>
+                <li><a className="hover:text-accent" href="https://github.com/keegan-dotcom/overwrite" target="_blank" rel="noreferrer">GitHub ↗</a></li>
               </ul>
             </div>
           </div>

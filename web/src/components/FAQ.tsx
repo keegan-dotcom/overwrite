@@ -35,7 +35,7 @@ export function FAQ() {
     <section className="border-t-2 border-paper bg-pane py-24">
       <div className="mx-auto max-w-3xl px-5">
         <SectionHead
-          no="08"
+          no="05"
           kicker="Correspondence"
           title={<>Questions people actually ask<span className="text-accent">.</span></>}
         />

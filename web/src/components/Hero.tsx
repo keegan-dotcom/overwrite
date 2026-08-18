@@ -78,18 +78,18 @@ export function Hero() {
             </Reveal>
             <Reveal delay={3}>
               <div className="mt-9 flex flex-wrap items-center gap-4 font-mono text-sm uppercase tracking-[0.06em]">
-                <a
-                  href="#yield"
+                <Link
+                  to="/app"
                   className="border-2 border-paper bg-accent px-6 py-3 font-bold text-ink shadow-hard transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
+                >
+                  Launch the app →
+                </Link>
+                <a
+                  href="#honest"
+                  className="border-2 border-paper bg-ink px-6 py-3 text-paper shadow-hard transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
                 >
                   See the honest numbers
                 </a>
-                <Link
-                  to="/dashboard"
-                  className="border-2 border-paper bg-ink px-6 py-3 text-paper shadow-hard transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
-                >
-                  Watch it trade →
-                </Link>
               </div>
             </Reveal>
           </div>

@@ -59,7 +59,7 @@ function ago(ts: number): string {
   return `${Math.round(s / 3600)}h ago`;
 }
 
-export function Dashboard() {
+export function Dashboard({ embedded = false }: { embedded?: boolean }) {
   const [tab, setTab] = useState<"positions" | "ledger" | "log">("positions");
   const [live, setLive] = useState<Status | null>(null);
 
@@ -81,7 +81,7 @@ export function Dashboard() {
   );
 
   return (
-    <main className="min-h-screen bg-ink pb-24 pt-28 text-paper"><div className="mx-auto max-w-6xl px-5">
+    <main className={embedded ? "bg-ink pb-8 text-paper" : "min-h-screen bg-ink pb-24 pt-28 text-paper"}><div className={embedded ? "" : "mx-auto max-w-6xl px-5"}>
       <Reveal>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
