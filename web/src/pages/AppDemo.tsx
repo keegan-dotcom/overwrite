@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { asset, strategy, Quote, DEMO_PORTFOLIO, roundStrike, ASSETS, STRATEGIES, IntentParams } from "../data/appdata";
+import { asset, strategy, Quote, DEMO_PORTFOLIO, roundStrike, ASSETS, STRATEGIES, IntentParams, Holding } from "../data/appdata";
+import { connectWallet, hasWallet, shortAddr, WalletState } from "../lib/wallet";
 import { callPrice, strikeForYield, fmtUsd, fmtPct } from "../lib/options";
 import { parseIntent } from "../lib/intent";
 import { VaultPanel } from "../components/app/VaultPanel";
@@ -14,7 +15,7 @@ import type { ChatMsg, FeedEvent, Position, Suggestion } from "../components/app
 const now = () =>
   new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
-const holdingQty = (sym: string) => DEMO_PORTFOLIO.find((h) => h.symbol === sym)?.qty ?? 1;
+const qtyIn = (list: Holding[], sym: string) => list.find((h) => h.symbol === sym)?.qty ?? 1;
 
 /* Preference memory: the agent remembers your risk defaults across visits.
  * Explicit prompt values always win; saved defaults fill the gaps. */
@@ -133,6 +134,11 @@ export function AppDemo() {
   const prefsRef = useRef<Prefs>({});
   const [defaultsNote, setDefaultsNote] = useState<string | null>(null);
   const [venueMode, setVenueMode] = useState<VenueMode>("v2");
+  const [wallet, setWallet] = useState<WalletState | null>(null);
+  const portfolio: Holding[] =
+    wallet && wallet.holdings.length ? wallet.holdings : DEMO_PORTFOLIO;
+  const portfolioRef = useRef<Holding[]>(DEMO_PORTFOLIO);
+  portfolioRef.current = portfolio;
 
   useEffect(() => {
     prefsRef.current = loadPrefs();
@@ -154,7 +160,7 @@ export function AppDemo() {
     // saved defaults fill gaps; anything explicit wins
     const merged = { ...prefsRef.current, ...params };
     const q = s.quote(a, merged);
-    const qty = holdingQty(sym);
+    const qty = qtyIn(portfolioRef.current, sym);
     setSelected(sym);
     setPickedId(stratId);
     setTicket(q);
@@ -184,6 +190,30 @@ export function AppDemo() {
   const onSelectAsset = useCallback((sym: string) => {
     structure(sym, pickedId ?? "income", {}, "silent");
   }, [structure, pickedId]);
+
+  const onConnect = useCallback(async () => {
+    const w = await connectWallet();
+    if (!w) return;
+    setWallet(w);
+    const seen = w.holdings.map((h) => `${h.qty.toLocaleString()} ${h.symbol}`).join(", ");
+    setMessages((m) => [
+      ...m,
+      {
+        role: "agent",
+        text: w.holdings.length
+          ? `Connected ${shortAddr(w.address)} (read-only). I can see ${seen}${w.usdc > 0 ? ` and $${w.usdc.toLocaleString()} USDC` : ""} - every strategy below is now sized to what you actually hold.`
+          : `Connected ${shortAddr(w.address)} (read-only), but I don't see ETH or WBTC on this ${w.chainId === 1 ? "wallet" : "network (switch to Ethereum mainnet for token balances)"} - showing the demo portfolio instead.`,
+      },
+    ]);
+  }, []);
+
+  // resize the current ticket to live holdings once a wallet connects
+  useEffect(() => {
+    if (wallet && wallet.holdings.length) {
+      structure(selected, pickedId ?? "income", {}, "silent");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallet]);
 
   /** Structure the intent, run the honesty check, post the agent's reply. */
   const applyIntent = useCallback((p: IncomingIntent) => {
@@ -222,7 +252,7 @@ export function AppDemo() {
 
     const lead = p.reply
       ? p.reply
-      : `Here's what I built - ${s.name} (${s.proName}) on your ${holdingQty(p.symbol).toLocaleString()} ${p.symbol}.`;
+      : `Here's what I built - ${s.name} (${s.proName}) on your ${qtyIn(portfolioRef.current, p.symbol).toLocaleString()} ${p.symbol}.`;
     setMessages((m) => [
       ...m,
       {
@@ -368,7 +398,21 @@ export function AppDemo() {
             </p>
           </div>
           <div className="flex flex-col items-end gap-1.5 font-mono text-[10.5px] uppercase tracking-[0.12em]">
-            <span className="border-2 border-amber px-2 py-0.5 text-amber">demo · simulated pricing</span>
+            <div className="flex items-center gap-2">
+              {hasWallet() && (
+                <button
+                  onClick={onConnect}
+                  className={`border-2 px-2.5 py-0.5 transition-colors ${
+                    wallet
+                      ? "border-mint text-mint"
+                      : "border-paper bg-accent font-bold text-ink shadow-hardsm hover:-translate-x-px hover:-translate-y-px"
+                  }`}
+                >
+                  {wallet ? `${shortAddr(wallet.address)} · live balances` : "Connect wallet"}
+                </button>
+              )}
+              <span className="border-2 border-amber px-2 py-0.5 text-amber">demo · simulated pricing</span>
+            </div>
             <label className="flex items-center gap-2 text-fog">
               venue
               <select
@@ -388,7 +432,7 @@ export function AppDemo() {
         <div className="grid gap-4 lg:grid-cols-12">
           {/* left: vault + feed */}
           <div className="space-y-4 lg:col-span-3">
-            <VaultPanel selected={selected} onSelect={onSelectAsset} positions={positions} vaultNote={VENUES[venueMode].vaultNote} />
+            <VaultPanel selected={selected} onSelect={onSelectAsset} positions={positions} vaultNote={VENUES[venueMode].vaultNote} holdings={portfolio} usdc={wallet?.usdc ?? 0} walletLabel={wallet && wallet.holdings.length ? shortAddr(wallet.address) : null} />
             <div className="hidden lg:block">
               <AgentFeed positions={positions} feed={feed} suggestion={suggestion} onAccept={onAccept} onDismiss={onDismiss} />
             </div>
