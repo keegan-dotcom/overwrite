@@ -1,0 +1,117 @@
+import { useEffect, useState } from "react";
+import { registerSessionKey } from "../../lib/deriveApi";
+import { HostedStatus, hostedActivate, hostedEnroll, hostedStatus } from "../../lib/hosted";
+
+/**
+ * Phase 2: the hosted pilot. The backend generates + holds a trading-scoped
+ * session key (encrypted at rest); the user authorizes it with ONE MetaMask
+ * tx; the fleet cycles every 15 minutes - laptop closed, tab closed.
+ * Testnet only. Revoke any time at testnet.derive.xyz → Developers.
+ */
+export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
+  const [deriveWallet, setDeriveWallet] = useState(
+    () => { try { return localStorage.getItem("overwrite_derive_wallet") ?? ""; } catch { return ""; } });
+  const [st, setSt] = useState<HostedStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const refresh = async (w: string) => {
+    if (/^0x[0-9a-fA-F]{40}$/.test(w)) setSt(await hostedStatus(w));
+  };
+  useEffect(() => { void refresh(deriveWallet); /* eslint-disable-next-line */ }, []);
+
+  const go = async () => {
+    setErr(""); setBusy(true);
+    try {
+      if (!/^0x[0-9a-fA-F]{40}$/.test(deriveWallet)) throw new Error("enter your Derive wallet address");
+      try { localStorage.setItem("overwrite_derive_wallet", deriveWallet); } catch { /* noop */ }
+      const e = await hostedEnroll(ownerEoa, deriveWallet);
+      if (e.error) throw new Error(e.error);
+      if (e.status !== "active") {
+        // one MetaMask tx: authorize OUR signer as a trading-scoped session key
+        await registerSessionKey(deriveWallet, e.session_key_address, ownerEoa);
+        for (let i = 0; i < 12; i++) {
+          await new Promise((r) => setTimeout(r, 5000));
+          const a = await hostedActivate(deriveWallet);
+          if (a.status === "active") break;
+          if (i === 11) throw new Error("key not active yet - wait a minute and hit Refresh");
+        }
+      }
+      await refresh(deriveWallet);
+    } catch (e2) {
+      setErr(String((e2 as Error).message ?? e2));
+    } finally { setBusy(false); }
+  };
+
+  const active = st?.enrolled && st.status === "active";
+
+  return (
+    <div className="border-2 border-mint bg-pane">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div>
+          <div className="font-mono text-[11px] uppercase tracking-[0.14em] text-mint">
+            Run it 24/7 · hosted pilot (testnet)
+          </div>
+          <div className="font-serif text-[12.5px] leading-snug text-fog">
+            One MetaMask signature authorizes our agent's key - trading-scoped,
+            can never withdraw. Then the fleet manages your account every 15
+            minutes with your laptop closed.
+          </div>
+        </div>
+        {active ? (
+          <span className="border-2 border-mint px-3 py-1.5 font-mono text-[11px] font-bold uppercase text-mint">
+            ● fleet active
+          </span>
+        ) : (
+          <button onClick={go} disabled={busy}
+            className="border-2 border-paper bg-accent px-3.5 py-1.5 font-mono text-[12px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px disabled:opacity-60">
+            {busy ? "working…" : st?.enrolled ? "Finish setup" : "Go 24/7"}
+          </button>
+        )}
+      </div>
+
+      <div className="space-y-2 border-t-2 border-line px-4 py-3">
+        <label className="block">
+          <span className="font-mono text-[10.5px] uppercase tracking-[0.1em] text-fog">
+            Your Derive wallet address (testnet.derive.xyz)
+          </span>
+          <input value={deriveWallet}
+            onChange={(e) => setDeriveWallet(e.target.value.trim())}
+            onBlur={() => void refresh(deriveWallet)}
+            placeholder="0x…"
+            className="mt-1 w-full border-2 border-line bg-ink px-3 py-1.5 font-mono text-[12.5px] text-paper placeholder:text-fog/50 focus:border-mint focus:outline-none" />
+        </label>
+
+        {st?.enrolled && (
+          <div className="space-y-1.5 border border-line bg-ink px-3 py-2 font-mono text-[11.5px] leading-snug">
+            <div className="text-paper">
+              status: <span className={active ? "text-mint" : "text-amber"}>{st.status}</span>
+              {st.subaccount_id != null && <> · subaccount {st.subaccount_id}</>}
+              {st.last_cycle_at && <> · last cycle {new Date(st.last_cycle_at).toLocaleTimeString()}</>}
+            </div>
+            {(st.premium_recent ?? 0) > 0 && (
+              <div className="text-mint">premium collected (recent): ${st.premium_recent!.toFixed(2)}</div>
+            )}
+            {(st.cycles ?? []).slice(0, 4).map((c, i) => (
+              <div key={i} className={c.ok ? "text-fog" : "text-rose"}>
+                · {new Date(c.ts).toLocaleTimeString()} {c.msg}
+              </div>
+            ))}
+            {st.last_error && <div className="text-rose">last error: {st.last_error}</div>}
+            <button onClick={() => void refresh(deriveWallet)}
+              className="mt-1 border border-line px-2 py-0.5 text-[10px] uppercase text-fog hover:border-fog">
+              refresh
+            </button>
+          </div>
+        )}
+
+        {err && <div className="border border-rose px-3 py-2 font-mono text-[11.5px] text-rose">{err}</div>}
+
+        <div className="font-serif text-[11.5px] italic leading-snug text-fog">
+          Testnet pilot: fake money, real orders, real 24/7 loop. Pause any
+          time by revoking the session key at testnet.derive.xyz → Developers.
+        </div>
+      </div>
+    </div>
+  );
+}

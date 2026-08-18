@@ -6,6 +6,7 @@ import { parseIntent } from "../lib/intent";
 import { VaultPanel } from "../components/app/VaultPanel";
 import { RunItYourself } from "../components/app/RunItYourself";
 import { TestnetPanel } from "../components/app/TestnetPanel";
+import { HostedPanel } from "../components/app/HostedPanel";
 import { Dashboard } from "./Dashboard";
 import { VENUES, VenueMode } from "../data/venues";
 import { StrategyShelf } from "../components/app/StrategyShelf";
@@ -466,6 +467,9 @@ export function AppDemo() {
             <div ref={ticketRef} className="space-y-3">
               {ticket && (
                 <TradeTicket q={ticket} qty={ticketQty} onDeploy={onDeploy} deployed={deployedTicket} venueMode={venueMode} />
+              )}
+              {ticket && deployedTicket && wallet && venueMode === "v2" && (
+                <HostedPanel ownerEoa={wallet.address} />
               )}
               {ticket && deployedTicket && wallet && venueMode === "v2" && (
                 <TestnetPanel q={ticket} qty={ticketQty} ownerEoa={wallet.address} />

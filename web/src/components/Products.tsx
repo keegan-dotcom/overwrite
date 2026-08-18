@@ -23,11 +23,11 @@ const CARDS = [
     foot: "Claude plugin · MCP · Python CLI · 116 tests",
   },
   {
-    kicker: "For hands-off · coming soon",
+    kicker: "For hands-off · testnet pilot live",
     title: "Hosted",
-    body: "The agent runs 24/7 without your laptop: one isolated account per user, session-key scoped so it can trade but never withdraw, honest monthly yield reports. Pay only when it earns.",
-    cta: { label: "Join the waitlist →", href: "/#waitlist" },
-    foot: "Per-user isolation · revoke any time · 10% of harvested premium",
+    body: "The agent runs 24/7 without your laptop: one isolated account per user, a session key scoped so it can trade but never withdraw, cycles every 15 minutes. Live on testnet now - one signature in the app turns it on. Mainnet joins via the waitlist.",
+    cta: { label: "Try the pilot →", to: "/app" },
+    foot: "Per-user isolation · revoke any time · mainnet waitlist open",
   },
 ];
 
