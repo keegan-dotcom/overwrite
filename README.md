@@ -50,6 +50,18 @@ upside; the strategy's edge is the volatility risk premium, which is real but
 modest. This repo's marketing surface should always quote *gross premium
 yield* with that caveat — see `docs/STRATEGY.md` for the full analysis.
 
+## Use it from Claude (MCP)
+
+The agent ships as an MCP server — quote strategies, generate configs, run
+preflight and dry-run cycles, and check status by talking to Claude:
+
+```bash
+claude mcp add overwrite -- python3 -m agent.mcp_server
+```
+
+No MCP tool can place a live order; going live stays a human step in a
+terminal. See `docs/MCP.md`.
+
 ## Quickstart
 
 ```bash
