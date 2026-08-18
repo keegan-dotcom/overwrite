@@ -5,7 +5,13 @@ flow into a conversation. Claude quotes strategies, writes configs, runs
 preflight and dry-run cycles, and reads your agent's status — while live
 trading stays a deliberate human action in a terminal.
 
-## Easiest: the plugin (Claude Code)
+## Easiest: the plugin
+
+**Claude app (Cowork/desktop — no terminal needed):** Customize → Plugins
+→ Personal plugins → **+** → Add marketplace → *Add from a repository* →
+`keegan-dotcom/overwrite` → Install.
+
+**Claude Code terminal:**
 
 ```
 /plugin marketplace add keegan-dotcom/overwrite

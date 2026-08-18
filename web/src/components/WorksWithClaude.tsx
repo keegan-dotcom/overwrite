@@ -31,10 +31,20 @@ export function WorksWithClaude() {
               Install once
             </p>
             <h3 className="mt-2 font-display text-xl uppercase">As a Claude plugin</h3>
-            <pre className="mt-4 overflow-x-auto border border-line bg-pane px-4 py-3 font-mono text-[12.5px] leading-relaxed text-paper">{PLUGIN_CMD}</pre>
+            <p className="mt-3 font-serif text-[14px] leading-relaxed text-paper/85">
+              <span className="font-bold text-paper">Claude app (Cowork):</span>{" "}
+              Customize → Plugins → Personal plugins → <span className="font-mono text-[13px]">+</span> Add
+              marketplace → Add from a repository →{" "}
+              <span className="font-mono text-[13px] text-mint">keegan-dotcom/overwrite</span> → Install.
+            </p>
+            <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.1em] text-fog">
+              or in the Claude Code terminal:
+            </p>
+            <pre className="mt-2 overflow-x-auto border border-line bg-pane px-4 py-3 font-mono text-[12.5px] leading-relaxed text-paper">{PLUGIN_CMD}</pre>
             <p className="mt-3 font-serif text-[14px] leading-relaxed text-paper/75">
-              Bundles the MCP server and the operator skill — Claude learns the
-              strategies, the runbook, and the honesty rules the moment it installs.
+              Either way it bundles the MCP server and the operator skill — Claude
+              learns the strategies, the runbook, and the honesty rules the moment
+              it installs.
             </p>
             <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.1em] text-fog">
               or raw MCP, one line after clone:

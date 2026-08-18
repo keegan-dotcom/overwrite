@@ -14,16 +14,19 @@ Derive's testnet is the v2 stack: app at **testnet.derive.xyz**, API at
 1. Go to https://testnet.derive.xyz with a fresh browser wallet (e.g. a new
    MetaMask account). Sign in — this deploys your Derive **smart-contract
    wallet** and creates a **subaccount**.
-2. Use the testnet faucet in the app UI to fund the subaccount with test
-   USDC + ETH (drip button in the deposit flow).
-3. Create a **session key** for the agent: Developers → Session Keys in the
+2. Get ~0.1–0.3 Sepolia ETH from any public faucet (Alchemy/Infura run
+   reliable ones) — needed for the L1 side of testnet deposits.
+3. Use the testnet faucet in the app UI to fund the subaccount with test
+   USDC + ETH. NOTE: it's a drip **inside the deposit flow**, not a
+   standalone "Faucet" button — open Deposit and look there.
+4. Create a **session key** for the agent: Developers → Session Keys in the
    app (or `register_session_key` via API). Scope it to trading only. Export
    its private key.
-4. Find your identifiers:
+5. Find your identifiers:
    - `DERIVE_WALLET` — the smart-contract wallet address (shown in the app)
    - `DERIVE_SUBACCOUNT_ID` — integer id (shown in the app / API)
    - `DERIVE_SESSION_KEY` — the session key's private key
-5. `cp .env.example .env`, fill the three values. `set -a; source .env` or use
+6. `cp .env.example .env`, fill the three values. `set -a; source .env` or use
    direnv/dotenv.
 
 Sanity check:

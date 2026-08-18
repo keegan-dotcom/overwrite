@@ -7,7 +7,9 @@ import { RUNNABLE, downloadYaml, runSteps } from "../../lib/exporter";
  * Post-approval handoff: download the generated agent config and run the
  * strategy from your own terminal - non-custodial, your keys, your machine.
  */
-const MCP_SNIPPET = `# in Claude Code - installs the MCP server + operator skill:
+const MCP_SNIPPET = `# Claude app (Cowork): Customize > Plugins > + Add marketplace
+#   > Add from a repository > keegan-dotcom/overwrite > Install
+# Claude Code terminal:
 /plugin marketplace add keegan-dotcom/overwrite
 /plugin install overwrite@overwrite
 # then just say: "set up overwrite" - Claude automates the rest`;

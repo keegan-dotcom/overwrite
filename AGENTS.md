@@ -43,10 +43,15 @@ Tools: `setup_check`, `quote_strategy`, `generate_config`, `preflight`,
 
 1. `setup_check` → fix what it lists: `python3 -m pip install -r
    requirements.txt` (needs Python 3.10–3.13); `cp .env.example .env`.
-2. The one wallet step: user creates a trading-scoped session key at
-   testnet.derive.xyz (Developers tab) — it can trade, it can never
-   withdraw — and fills `DERIVE_WALLET`, `DERIVE_SESSION_KEY`,
-   `DERIVE_SUBACCOUNT_ID` in `.env` themselves.
+2. Derive testnet onboarding (guide the user; full detail in
+   `skills/overwrite-desk/SKILL.md` and `docs/RUNBOOK.md`): connect a
+   wallet at testnet.derive.xyz and sign to enable trading (creates their
+   Derive smart-contract wallet + subaccount) → get Sepolia ETH from any
+   public faucet → use the testnet drip INSIDE the deposit flow for USDC
+   + the asset to overwrite → create a trading-scoped session key
+   (Developers → Session Keys; it can trade, never withdraw) → fill
+   `DERIVE_WALLET` (the smart-contract wallet, not their EOA),
+   `DERIVE_SESSION_KEY`, `DERIVE_SUBACCOUNT_ID` in `.env` themselves.
 3. `quote_strategy` from their words → `generate_config` → `preflight`
    → `dry_run_once` (narrate the decision) → hand over the live command.
 

@@ -37,19 +37,46 @@ drive this sequence yourself - don't hand them a doc:
 2. **Deps missing** → run in the plugin/repo directory:
    `python3 -m pip install -r requirements.txt` (add
    `--break-system-packages` if pip refuses). Re-run `setup_check`.
-3. **.env missing** → `cp .env.example .env`, then tell the user exactly
-   what goes in it and where each value comes from:
-   - `DERIVE_WALLET` - their Derive wallet address (derive.xyz → account).
-   - `DERIVE_SESSION_KEY` - the ONE wallet step that can't be automated:
-     on derive.xyz (testnet first: testnet.derive.xyz) → Developers →
-     create a session key (trading scope). It's a signature from their
-     wallet; the key can trade but can never withdraw. They paste the
-     private key into `.env` in their own editor - not into chat.
-   - `DERIVE_SUBACCOUNT_ID` - shown in the same developer panel.
-   Then they run `set -a; source .env; set +a` in the terminal they'll use
-   (or you export a reminder; the MCP server inherits its own env - if env
-   vars are missing at preflight, tell them to restart Claude after
-   setting them, or add the values to the MCP server env).
+3. **.env missing** → `cp .env.example .env`, then guide the Derive
+   testnet onboarding below and have them fill the three values in their
+   own editor. Then `set -a; source .env; set +a` in the terminal they'll
+   use (the MCP server inherits its own env - if vars are missing at
+   preflight, tell them to restart Claude after setting them, or add the
+   values to the MCP server config's env).
+
+### Derive testnet onboarding (first time, ~10 min - walk them through it)
+
+1. **Wallet + enable trading**: go to **testnet.derive.xyz** with a
+   browser wallet (MetaMask/Rabby), connect, and sign the onboarding
+   prompts - this deploys their Derive **smart-contract wallet** and
+   creates a **subaccount**. (Their EOA stays the owner; the Derive wallet
+   address is a different address shown in the app.)
+2. **Sepolia ETH** (needed for the L1 side of testnet deposits): any
+   public Sepolia faucet works - Google "sepolia faucet" (Alchemy and
+   Infura run reliable ones; some require a free account). ~0.1-0.3 ETH
+   is plenty.
+3. **Test funds on Derive**: the faucet/drip is **inside the deposit
+   flow** in the testnet app - users often can't find it because it's not
+   a standalone "Faucet" button. Open Deposit and look for the testnet
+   drip for USDC and ETH. Fund the subaccount with USDC (collateral) and
+   the asset they want to sell calls on (e.g. ETH).
+4. **Session key** (the one step that makes the agent able to trade):
+   testnet.derive.xyz → **Developers → Session Keys** → register a new
+   key with **trading scope**. It's authorized by a wallet signature; the
+   key can trade but can NEVER withdraw. They copy its **private key**
+   into `.env` themselves - never into chat.
+5. **Identifiers for .env**:
+   - `DERIVE_WALLET` = the Derive smart-contract wallet address (in the
+     app, NOT their MetaMask address)
+   - `DERIVE_SUBACCOUNT_ID` = integer shown in the app/API
+   - `DERIVE_SESSION_KEY` = the session key's private key
+6. Verify with `preflight` - it checks env, connectivity, margin,
+   balances and option chains, and tells you exactly what's missing.
+
+Testnet quirks to warn about: order books are often EMPTY - the agent
+handles this by resting post-only maker quotes at mark (a resting quote,
+not an instant fill, is success). If preflight shows no holdings, they
+skipped the drip step.
 4. **Structure the trade**: `quote_strategy` from their words →
    `generate_config` once they like it.
 5. **Verify**: `preflight` (fix any ✗ with them), then `dry_run_once` and
