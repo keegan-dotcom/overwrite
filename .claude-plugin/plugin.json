@@ -1,0 +1,13 @@
+{
+  "name": "overwrite",
+  "displayName": "Overwrite — Agentic Options Desk",
+  "version": "0.1.0",
+  "description": "Intent-based options on Derive from inside Claude: quote strategies with full disclosure, generate runnable agent configs, run preflight and dry-run cycles, monitor the premium ledger. Requires one-time setup: pip install -r requirements.txt and Derive keys in .env. No tool can place a live order.",
+  "author": { "name": "Keegan Selby", "url": "https://github.com/keegan-dotcom" },
+  "homepage": "https://overwrite.pro",
+  "repository": "https://github.com/keegan-dotcom/overwrite",
+  "license": "MIT",
+  "keywords": ["options", "defi", "derive", "covered-calls", "yield"],
+  "skills": "./skills/",
+  "mcpServers": "./mcp-servers.json"
+}

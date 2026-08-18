@@ -1,0 +1,21 @@
+{
+  "name": "overwrite",
+  "owner": {
+    "name": "Keegan Selby",
+    "url": "https://github.com/keegan-dotcom"
+  },
+  "description": "Overwrite — the agentic options desk. Intent-based options strategies on Derive, managed from Claude.",
+  "plugins": [
+    {
+      "name": "overwrite",
+      "source": "./",
+      "description": "Quote options strategies in plain English, generate runnable agent configs, run preflight and dry-run cycles, and monitor your Overwrite agent. No tool can place a live order — going live stays a human step.",
+      "version": "0.1.0",
+      "author": { "name": "Keegan Selby", "url": "https://github.com/keegan-dotcom" },
+      "homepage": "https://overwrite.pro",
+      "repository": "https://github.com/keegan-dotcom/overwrite",
+      "license": "MIT",
+      "keywords": ["options", "defi", "derive", "covered-calls", "yield", "trading-agent"]
+    }
+  ]
+}

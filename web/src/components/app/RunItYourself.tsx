@@ -7,10 +7,10 @@ import { RUNNABLE, downloadYaml, runSteps } from "../../lib/exporter";
  * Post-approval handoff: download the generated agent config and run the
  * strategy from your own terminal - non-custodial, your keys, your machine.
  */
-const MCP_SNIPPET = `# easiest: talk to the agent from Claude instead of raw terminal
-git clone https://github.com/keegan-dotcom/overwrite && cd overwrite
-./install.sh
-claude mcp add overwrite -- python3 -m agent.mcp_server`;
+const MCP_SNIPPET = `# in Claude Code - installs the MCP server + operator skill:
+/plugin marketplace add keegan-dotcom/overwrite
+/plugin install overwrite@overwrite
+# then just say: "set up overwrite" - Claude automates the rest`;
 
 const MCP_DESKTOP = `{
   "mcpServers": {
@@ -82,9 +82,16 @@ export function RunItYourself({ q, qty, mode }: { q: Quote; qty: number; mode: V
             <div className="mb-1 font-mono text-[11px] text-fog">Claude Desktop (Settings → Developer → Edit Config):</div>
             <pre className="overflow-x-auto border border-line bg-ink px-3 py-2 font-mono text-[11.5px] leading-relaxed text-paper">{MCP_DESKTOP}</pre>
           </div>
+          <div>
+            <div className="mb-1 font-mono text-[11px] text-fog">ChatGPT / Codex (MCP is an open standard — ~/.codex/config.toml):</div>
+            <pre className="overflow-x-auto border border-line bg-ink px-3 py-2 font-mono text-[11.5px] leading-relaxed text-paper">{`[mcp_servers.overwrite]
+command = "bash"
+args = ["-lc", "cd /path/to/overwrite && python3 -m agent.mcp_server"]`}</pre>
+          </div>
           <div className="font-serif text-[12px] italic leading-snug text-fog">
             One-time wallet step still applies: your Derive session key (a trading-scoped
-            signature that can't withdraw) goes in .env on your machine. Full guide: docs/MCP.md in the repo.
+            signature that can't withdraw) goes in .env on your machine. Codex reads the
+            repo's AGENTS.md automatically — same rules, same rails. Full guide: docs/MCP.md.
           </div>
         </div>
       )}

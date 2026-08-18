@@ -5,7 +5,21 @@ flow into a conversation. Claude quotes strategies, writes configs, runs
 preflight and dry-run cycles, and reads your agent's status — while live
 trading stays a deliberate human action in a terminal.
 
-## Setup (once)
+## Easiest: the plugin (Claude Code)
+
+```
+/plugin marketplace add keegan-dotcom/overwrite
+/plugin install overwrite@overwrite
+```
+
+That bundles the MCP server AND the operator skill (strategy knowledge,
+guided setup, honesty rules). Then just say **"set up overwrite"** —
+Claude runs `setup_check`, installs dependencies, creates `.env`, and
+walks you through the one wallet step (creating a trading-scoped session
+key on derive.xyz). You fill `.env` in your own editor — never paste keys
+into chat.
+
+## Manual: raw MCP server
 
 ```bash
 git clone https://github.com/keegan-dotcom/overwrite && cd overwrite
@@ -37,6 +51,22 @@ Put your Derive keys in `.env` as usual (`DERIVE_WALLET`,
 one-time wallet signature and stays on your machine. The MCP server never
 sees your seed phrase and cannot withdraw funds (session keys are
 trading-scoped by Derive).
+
+## ChatGPT / Codex / any MCP client
+
+MCP is an open standard — the same server works outside Claude. OpenAI
+Codex (CLI, VS Code, or the Codex app), in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.overwrite]
+command = "bash"
+args = ["-lc", "cd /absolute/path/to/overwrite && python3 -m agent.mcp_server"]
+```
+
+Codex also reads this repo's `AGENTS.md` automatically — it carries the
+same operator rules as the Claude skill (disclosures, no live trading,
+setup flow). ChatGPT's web connectors require a *remote* MCP endpoint;
+a hosted SSE endpoint is on the roadmap — until then use Codex locally.
 
 ## What you can say
 

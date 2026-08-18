@@ -52,8 +52,17 @@ yield* with that caveat — see `docs/STRATEGY.md` for the full analysis.
 
 ## Use it from Claude (MCP)
 
-The agent ships as an MCP server — quote strategies, generate configs, run
-preflight and dry-run cycles, and check status by talking to Claude:
+The agent ships as a Claude plugin (MCP server + operator skill). In
+Claude Code:
+
+```
+/plugin marketplace add keegan-dotcom/overwrite
+/plugin install overwrite@overwrite
+```
+
+Then say "set up overwrite" — Claude automates the install and checks,
+you fill `.env` once (the session-key wallet step), and the only remaining
+human action is the live command. Raw MCP without the plugin:
 
 ```bash
 claude mcp add overwrite -- python3 -m agent.mcp_server

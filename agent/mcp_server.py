@@ -88,6 +88,55 @@ def _strike_for_yield(spot: float, target: float, vol: float, t: float) -> Optio
 
 
 @mcp.tool()
+def setup_check() -> dict:
+    """Report environment readiness for plug-and-play setup: python version,
+    installed dependencies, .env completeness (booleans only - values are
+    never read into the conversation), and data dir. Returns a todo list of
+    what still needs fixing and how."""
+    import importlib.util
+    import sys
+
+    deps = {name: importlib.util.find_spec(mod) is not None
+            for name, mod in (("derive_client", "derive_client"),
+                              ("pyyaml", "yaml"), ("mcp", "mcp"))}
+    env_file = Path(".env")
+    env_keys: dict[str, bool] = {}
+    if env_file.exists():
+        text = env_file.read_text()
+        for k in ("DERIVE_WALLET", "DERIVE_SESSION_KEY", "DERIVE_SUBACCOUNT_ID"):
+            env_keys[k] = any(
+                line.split("=", 1)[0].strip() == k and line.split("=", 1)[1].strip()
+                for line in text.splitlines() if "=" in line and not line.lstrip().startswith("#")
+            )
+    live_env = {k: bool(os.environ.get(k))
+                for k in ("DERIVE_WALLET", "DERIVE_SESSION_KEY", "DERIVE_SUBACCOUNT_ID")}
+    py_ok = (3, 10) <= sys.version_info[:2] <= (3, 13)
+
+    todo: list[str] = []
+    if not py_ok:
+        todo.append(f"python {sys.version_info.major}.{sys.version_info.minor} unsupported - need 3.10-3.13")
+    if not all(deps.values()):
+        missing = [k for k, v in deps.items() if not v]
+        todo.append(f"install deps ({', '.join(missing)}): python3 -m pip install -r requirements.txt")
+    if not env_file.exists():
+        todo.append("create .env: cp .env.example .env, then fill the three DERIVE_* values (user edits it - never paste keys in chat)")
+    elif not all(env_keys.values()):
+        todo.append(f".env incomplete: fill {', '.join(k for k, v in env_keys.items() if not v)}")
+    if all(env_keys.values()) and not all(live_env.values()):
+        todo.append("keys in .env but not in this process env - restart Claude, or set them in the MCP server env")
+    return {
+        "python": f"{sys.version_info.major}.{sys.version_info.minor}",
+        "python_ok": py_ok,
+        "deps_installed": deps,
+        "env_file_exists": env_file.exists(),
+        "env_file_keys_filled": env_keys,
+        "process_env_present": live_env,
+        "ready": py_ok and all(deps.values()) and bool(env_keys) and all(env_keys.values()),
+        "todo": todo or ["nothing - run preflight next"],
+    }
+
+
+@mcp.tool()
 def quote_strategy(
     symbol: str,
     strategy: str = "income",

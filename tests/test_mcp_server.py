@@ -52,6 +52,19 @@ def test_generate_config_roundtrips(tmp_path):
     assert cfg.dry_run is True and cfg.underlyings[0].symbol == "BTC"
 
 
+def test_setup_check_reports_without_leaking_values(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text("DERIVE_WALLET=0xabc\nDERIVE_SESSION_KEY=\n# DERIVE_SUBACCOUNT_ID=5\n")
+    out = m.setup_check()
+    assert out["env_file_exists"] is True
+    assert out["env_file_keys_filled"] == {
+        "DERIVE_WALLET": True, "DERIVE_SESSION_KEY": False, "DERIVE_SUBACCOUNT_ID": False,
+    }
+    # no secret values anywhere in the payload
+    assert "0xabc" not in str(out)
+    assert out["ready"] is False and any(".env incomplete" in t for t in out["todo"])
+
+
 def test_go_live_instructions_never_trades(tmp_path):
     out = m.generate_config("BTC", "income", out_path=str(tmp_path / "t.yaml"))
     info = m.go_live_instructions(out["config_path"])
