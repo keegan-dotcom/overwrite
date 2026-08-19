@@ -67,6 +67,7 @@ export function TestnetPanel({
         say(`session key ${address.slice(0, 8)}… already active - no wallet popup needed`);
       } else {
         say(`registering session key ${address.slice(0, 8)}… (one MetaMask tx on Derive Chain - needs a little testnet gas)`);
+        say(`NO GAS on Derive Chain? Register it gaslessly instead: testnet.derive.xyz → Developers → Register Session Key → paste ${address} → then click Start again`);
         const hash = await registerSessionKey(deriveWallet, address, ownerEoa);
         say(`registration tx sent: ${hash.slice(0, 14)}… waiting for the API to see it`);
         for (let i = 0; i < 12; i++) {

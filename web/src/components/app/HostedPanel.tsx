@@ -30,15 +30,37 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
       try { localStorage.setItem("overwrite_derive_wallet", deriveWallet); } catch { /* noop */ }
       const e = await hostedEnroll(ownerEoa, deriveWallet);
       if (e.error) throw new Error(e.error);
-      if (e.status !== "active") {
-        // one MetaMask tx: authorize OUR signer as a trading-scoped session key
-        await registerSessionKey(deriveWallet, e.session_key_address, ownerEoa);
-        for (let i = 0; i < 12; i++) {
-          await new Promise((r) => setTimeout(r, 5000));
-          const a = await hostedActivate(deriveWallet);
-          if (a.status === "active") break;
-          if (i === 11) throw new Error("key not active yet - wait a minute and hit Refresh");
-        }
+      await refresh(deriveWallet); // shows the registration options block
+    } catch (e2) {
+      setErr(String((e2 as Error).message ?? e2));
+    } finally { setBusy(false); }
+  };
+
+  /** Path A: user registered our key in Derive's UI (gasless paymaster). */
+  const checkActivation = async () => {
+    setErr(""); setBusy(true);
+    try {
+      const a = await hostedActivate(deriveWallet);
+      if (a.status !== "active") {
+        throw new Error(a.detail ?? "not active yet - registration can take ~30s to index; try again");
+      }
+      await refresh(deriveWallet);
+    } catch (e2) {
+      setErr(String((e2 as Error).message ?? e2));
+    } finally { setBusy(false); }
+  };
+
+  /** Path B: sign the registration tx here (needs gas ETH on Derive Chain). */
+  const signHere = async () => {
+    setErr(""); setBusy(true);
+    try {
+      if (!st?.session_key_address) throw new Error("enroll first");
+      await registerSessionKey(deriveWallet, st.session_key_address, ownerEoa);
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const a = await hostedActivate(deriveWallet);
+        if (a.status === "active") break;
+        if (i === 11) throw new Error("key not active yet - wait a minute and hit refresh");
       }
       await refresh(deriveWallet);
     } catch (e2) {
@@ -56,9 +78,9 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
             Run it 24/7 · hosted pilot (testnet)
           </div>
           <div className="font-serif text-[12.5px] leading-snug text-fog">
-            One MetaMask signature authorizes our agent's key - trading-scoped,
-            can never withdraw. Then the fleet manages your account every 15
-            minutes with your laptop closed.
+            Authorize our agent's key once - gasless via Derive's own page, or
+            one signature here. Trading-scoped, can never withdraw. Then the
+            fleet manages your account every 15 minutes, laptop closed.
           </div>
         </div>
         {active ? (
@@ -84,6 +106,43 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
             placeholder="0x…"
             className="mt-1 w-full border-2 border-line bg-ink px-3 py-1.5 font-mono text-[12.5px] text-paper placeholder:text-fog/50 focus:border-mint focus:outline-none" />
         </label>
+
+        {st?.enrolled && st.status === "awaiting_registration" && st.session_key_address && (
+          <div className="space-y-2 border-2 border-amber bg-ink px-3 py-2.5">
+            <div className="font-mono text-[10.5px] uppercase tracking-[0.12em] text-amber">
+              One step left: authorize the fleet's key
+            </div>
+            <div className="flex flex-wrap items-center gap-2 font-mono text-[12px] text-paper">
+              <span className="break-all border border-line px-2 py-1">{st.session_key_address}</span>
+              <button
+                onClick={() => { void navigator.clipboard?.writeText(st.session_key_address!); }}
+                className="border border-line px-2 py-1 text-[10.5px] uppercase text-fog hover:border-fog hover:text-paper"
+              >
+                copy
+              </button>
+            </div>
+            <div className="font-serif text-[13px] leading-snug text-paper/85">
+              <span className="font-bold text-paper">Gasless (recommended):</span>{" "}
+              open{" "}
+              <a href="https://testnet.derive.xyz" target="_blank" rel="noreferrer"
+                 className="text-mint underline decoration-2 underline-offset-2">
+                testnet.derive.xyz
+              </a>{" "}
+              → Developers → <em>Register Session Key</em> → paste the address
+              above (scope: admin, any expiry) → Derive pays the gas. Then:
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={checkActivation} disabled={busy}
+                className="border-2 border-paper bg-accent px-3 py-1.5 font-mono text-[11.5px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px disabled:opacity-60">
+                {busy ? "checking…" : "I registered it → activate"}
+              </button>
+              <button onClick={signHere} disabled={busy}
+                className="border-2 border-line px-3 py-1.5 font-mono text-[11.5px] uppercase text-fog transition-colors hover:border-fog hover:text-paper disabled:opacity-60">
+                or sign here (needs gas ETH on Derive Chain)
+              </button>
+            </div>
+          </div>
+        )}
 
         {st?.enrolled && (
           <div className="space-y-1.5 border border-line bg-ink px-3 py-2 font-mono text-[11.5px] leading-snug">
