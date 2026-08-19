@@ -143,7 +143,15 @@ async function cycle(db: any, t: any): Promise<string> {
 
   const amount = quantize(Math.min(capacity, cfg.max_order ?? 5), best.amount_step ?? "0.1");
   if (Number(amount) <= 0) return "capacity below amount step · idle";
-  const price = quantize(Math.max(mark, Number(tick.best_ask_price) || mark), best.tick_size ?? "0.1");
+  // post-only sell: the price must sit ABOVE the best bid or the venue
+  // rejects it (11008 "cannot cross the market"). Quote at the better of
+  // mark/ask, then bump one tick past the bid if the book has crossed up.
+  const tickSz = best.tick_size ?? "0.1";
+  const bid = Number(tick.best_bid_price) || 0;
+  let px = Number(quantize(Math.max(mark, Number(tick.best_ask_price) || mark), tickSz));
+  if (px <= bid) px = bid + Number(tickSz);
+  const dp = (tickSz.split(".")[1] ?? "").length;
+  const price = px.toFixed(dp);
 
   const nonce = actionNonce();
   const expiry = Math.floor(Date.now() / 1000) + 3600;
@@ -158,12 +166,21 @@ async function cycle(db: any, t: any): Promise<string> {
       signatureExpirySec: expiry, owner: t.derive_wallet, signer,
     }),
   });
-  await rpc("private/order", {
-    instrument_name: best.instrument_name, direction: "sell", order_type: "limit",
-    time_in_force: "post_only", amount, limit_price: price, max_fee: "1000",
-    subaccount_id: subId, nonce: "__nonce__", signature,
-    signature_expiry_sec: expiry, signer, mmp: false, reduce_only: false, label: LABEL,
-  }, hdrs, nonce);
+  try {
+    await rpc("private/order", {
+      instrument_name: best.instrument_name, direction: "sell", order_type: "limit",
+      time_in_force: "post_only", amount, limit_price: price, max_fee: "1000",
+      subaccount_id: subId, nonce: "__nonce__", signature,
+      signature_expiry_sec: expiry, signer, mmp: false, reduce_only: false, label: LABEL,
+    }, hdrs, nonce);
+  } catch (e) {
+    // 11008 = the book moved between pricing and placement; post-only
+    // protection kicked in. Benign - we re-quote next cycle at fresh prices.
+    if (String(e).includes("cannot cross")) {
+      return `book moved at quote time - post-only protection skipped this cycle (re-quotes in 15m) ${notes.join(" · ")}`;
+    }
+    throw e;
+  }
   await db.from("ledger").insert({
     tenant_id: t.id, kind: "quote_placed", instrument: best.instrument_name,
     usd: Number(price) * Number(amount),

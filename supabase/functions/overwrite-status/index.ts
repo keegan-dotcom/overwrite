@@ -33,8 +33,12 @@ Deno.serve(async (req) => {
   const { data: cycles } = await db.from("cycles")
     .select("ts,ok,msg").eq("tenant_id", t.id)
     .order("ts", { ascending: false }).limit(12);
-  const premium = (ledger ?? []).filter((l) => l.kind === "premium_in")
-    .reduce((a, b) => a + Number(b.usd ?? 0), 0);
+  // premium over the last 30 days, queried directly so a burst of
+  // quote_placed rows can never push fills out of the window
+  const { data: premRows } = await db.from("ledger")
+    .select("usd").eq("tenant_id", t.id).eq("kind", "premium_in")
+    .gte("ts", new Date(Date.now() - 30 * 86400_000).toISOString());
+  const premium = (premRows ?? []).reduce((a, b) => a + Number(b.usd ?? 0), 0);
 
   // live venue snapshot (best-effort - the Console degrades gracefully)
   let positions: unknown[] | undefined;
