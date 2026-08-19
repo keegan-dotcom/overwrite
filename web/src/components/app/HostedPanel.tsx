@@ -24,6 +24,9 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
     setErr(""); setBusy(true);
     try {
       if (!/^0x[0-9a-fA-F]{40}$/.test(deriveWallet)) throw new Error("enter your Derive wallet address");
+      if (deriveWallet.toLowerCase() === ownerEoa.toLowerCase()) {
+        throw new Error("that's your MetaMask/Rabby address (the 'Signer'). Enter the 'Wallet' address from testnet.derive.xyz → Developers - it's a different 0x address.");
+      }
       try { localStorage.setItem("overwrite_derive_wallet", deriveWallet); } catch { /* noop */ }
       const e = await hostedEnroll(ownerEoa, deriveWallet);
       if (e.error) throw new Error(e.error);
@@ -73,7 +76,7 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
       <div className="space-y-2 border-t-2 border-line px-4 py-3">
         <label className="block">
           <span className="font-mono text-[10.5px] uppercase tracking-[0.1em] text-fog">
-            Your Derive wallet address (testnet.derive.xyz)
+            Your Derive wallet — the "Wallet" address at testnet.derive.xyz → Developers (NOT "Signer"/your MetaMask address)
           </span>
           <input value={deriveWallet}
             onChange={(e) => setDeriveWallet(e.target.value.trim())}

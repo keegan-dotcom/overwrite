@@ -101,26 +101,42 @@ export async function switchToDeriveChain(): Promise<string> {
 }
 
 /** Build the registration tx via the API, send it from MetaMask on Derive
- * Chain (owner pays a tiny amount of testnet gas). Returns the tx hash. */
+ * Chain (owner pays a tiny amount of testnet gas). Returns the tx hash.
+ * NOTE: the API REQUIRES nonce + gas despite the SDK marking them optional
+ * (-32602 otherwise), so we switch chains first and read the real nonce. */
 export async function registerSessionKey(
   deriveWallet: string, sessionKeyAddress: string, ownerEoa: string,
 ): Promise<string> {
+  if (deriveWallet.toLowerCase() === ownerEoa.toLowerCase()) {
+    throw new Error(
+      "that's your MetaMask/Rabby address - the field needs your DERIVE smart-contract wallet " +
+      "(a different 0x address, shown at testnet.derive.xyz in the account panel)");
+  }
+  await switchToDeriveChain(); // switch FIRST so the nonce reads Derive Chain
+  const nonceHex = (await eth().request({
+    method: "eth_getTransactionCount", params: [ownerEoa, "latest"],
+  })) as string;
   const expiry = Math.floor(Date.now() / 1000) + 30 * 86400; // 30 days
   const built = await rpc("public/build_register_session_key_tx", {
     wallet: deriveWallet,
     public_session_key: sessionKeyAddress,
     expiry_sec: expiry,
+    nonce: parseInt(nonceHex, 16),
+    gas: 500_000,
   });
-  const tx = built.tx_params as Record<string, unknown>;
-  await switchToDeriveChain();
+  const tx = (built.tx_params ?? built) as Record<string, unknown>;
+  const toHex = (v: unknown): string =>
+    typeof v === "string" && v.startsWith("0x") ? v : `0x${BigInt(v as number).toString(16)}`;
+  const params: Record<string, unknown> = {
+    from: ownerEoa,
+    to: tx.to,
+    data: tx.data ?? tx.input,
+  };
+  if (tx.value != null) params.value = toHex(tx.value);
+  if (tx.gas != null) params.gas = toHex(tx.gas);
   const hash = (await eth().request({
     method: "eth_sendTransaction",
-    params: [{
-      from: ownerEoa,
-      to: tx.to,
-      data: tx.data,
-      value: tx.value ?? "0x0",
-    }],
+    params: [params],
   })) as string;
   return hash;
 }

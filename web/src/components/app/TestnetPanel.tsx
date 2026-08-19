@@ -138,7 +138,7 @@ export function TestnetPanel({
       <div className="space-y-2 border-t-2 border-line px-4 py-3">
         <label className="block">
           <span className="font-mono text-[10.5px] uppercase tracking-[0.1em] text-fog">
-            Your Derive wallet address (from testnet.derive.xyz - the smart-contract wallet, not MetaMask)
+            Your Derive wallet — the "Wallet" address at testnet.derive.xyz → Developers (NOT "Signer"/your MetaMask address)
           </span>
           <input
             value={deriveWallet}
