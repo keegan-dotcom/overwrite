@@ -12,6 +12,7 @@ const RISK_DOT: Record<Strategy["risk"], string> = {
  */
 export function StrategyRail({
   symbol, activeId, onPick, holdings, usdc, walletLabel, onSelectAsset, selected,
+  vaultLabel, walletHoldings,
 }: {
   symbol: string;
   activeId: string | null;
@@ -21,6 +22,11 @@ export function StrategyRail({
   walletLabel: string | null;
   onSelectAsset: (sym: string) => void;
   selected: string;
+  /** e.g. "subaccount 144481" when the vault shows a Derive trading account */
+  vaultLabel?: string | null;
+  /** on-chain balances of the connected signing wallet, shown separately
+   *  when the vault is a Derive account (the "assets you already own") */
+  walletHoldings?: Holding[] | null;
 }) {
   const a = asset(symbol);
   const total = holdings.reduce((s, h) => s + h.qty * asset(h.symbol).spot, 0) + usdc;
@@ -57,9 +63,11 @@ export function StrategyRail({
 
       <div className="border-t-2 border-line px-3 py-2">
         <div className="flex items-baseline justify-between">
-          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-fog">Vault</span>
+          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-fog">
+            {vaultLabel ? "Trading account · Derive" : "Vault"}
+          </span>
           <span className="font-mono text-[9.5px] uppercase text-mint">
-            {walletLabel ? `${walletLabel} · live` : "demo"}
+            {vaultLabel ?? (walletLabel ? `${walletLabel} · live` : "demo")}
           </span>
         </div>
         <div className="font-display text-lg leading-tight text-paper">{fmtUsd(total)}</div>
@@ -85,6 +93,39 @@ export function StrategyRail({
           </div>
         )}
       </div>
+
+      {/* the connected signing wallet - "assets you already own", shown
+          separately from the trading account they'd be deposited into */}
+      {walletHoldings && (
+        <div className="border-t-2 border-line">
+          <div className="flex items-baseline justify-between px-3 pb-0.5 pt-2">
+            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-fog">
+              Your wallet
+            </span>
+            <span className="font-mono text-[9.5px] uppercase text-fog">{walletLabel}</span>
+          </div>
+          {walletHoldings.filter((h) => h.qty > 0).length === 0 ? (
+            <div className="px-3 pb-1.5 font-mono text-[10.5px] text-fog">
+              no tradable assets on this network
+            </div>
+          ) : (
+            walletHoldings.filter((h) => h.qty > 0).map((h) => {
+              const ha = asset(h.symbol);
+              return (
+                <div key={h.symbol}
+                  className="flex items-center justify-between px-3 py-1 font-mono text-[11px] text-paper">
+                  <span>{h.symbol} <span className="text-fog">{h.qty.toLocaleString()}</span></span>
+                  <span className="text-fog">{ha ? fmtUsd(h.qty * ha.spot) : "—"}</span>
+                </div>
+              );
+            })
+          )}
+          <div className="px-3 pb-1.5 font-serif text-[10px] italic leading-snug text-fog">
+            Deposit at testnet.derive.xyz to put wallet assets to work.
+          </div>
+        </div>
+      )}
+
       <div className="border-t border-line px-3 py-1.5 font-serif text-[10.5px] italic leading-snug text-fog">
         One isolated vault per user — only your keys withdraw.
       </div>

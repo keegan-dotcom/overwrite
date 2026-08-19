@@ -8,6 +8,7 @@ import { TestnetPanel } from "../components/app/TestnetPanel";
 import { HostedPanel } from "../components/app/HostedPanel";
 import { Console } from "../components/app/Console";
 import { TermsGate, termsAccepted } from "../components/app/TermsGate";
+import { hostedStatus } from "../lib/hosted";
 import { VENUES, VenueMode } from "../data/venues";
 import { StrategyRail } from "../components/app/StrategyRail";
 import { TradeTicket } from "../components/app/TradeTicket";
@@ -112,14 +113,30 @@ export function AppDemo() {
   const [wallet, setWallet] = useState<WalletState | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [gated, setGated] = useState(() => !termsAccepted());
+  // your Derive testnet trading account (collateral the agent actually trades),
+  // found via the connected signing wallet - kept separate from on-chain balances
+  const [deriveAcct, setDeriveAcct] = useState<{ sub: number | null; holdings: Holding[]; usdc: number } | null>(null);
   const [view, setView] = useState<"trade" | "console">("trade");
   // Connected: show YOUR portfolio - real balances where we can read them,
   // zeros for the rest, so it's obvious the screen is no longer demo data.
-  const portfolio: Holding[] = wallet
-    ? DEMO_PORTFOLIO.map((d) => ({
-        symbol: d.symbol,
-        qty: wallet.holdings.find((h) => h.symbol === d.symbol)?.qty ?? 0,
-      }))
+  // What the tickets size to: the Derive trading account when one exists
+  // (that's what the agent trades), else the connected wallet, else demo.
+  const activeHoldings = deriveAcct ? deriveAcct.holdings : wallet?.holdings ?? null;
+  const portfolio: Holding[] = activeHoldings
+    ? [
+        ...DEMO_PORTFOLIO.map((d) => ({
+          symbol: d.symbol,
+          qty: activeHoldings.find((h) => h.symbol === d.symbol)?.qty ?? 0,
+        })),
+        // any KNOWN asset held that isn't in the standard rail list still
+        // shows (unknown collateral symbols are skipped - no pricing for them)
+        ...activeHoldings.filter(
+          (h) =>
+            h.qty > 0 &&
+            !DEMO_PORTFOLIO.some((d) => d.symbol === h.symbol) &&
+            ASSETS.some((a) => a.symbol === h.symbol),
+        ),
+      ]
     : DEMO_PORTFOLIO;
   const portfolioRef = useRef<Holding[]>(DEMO_PORTFOLIO);
   portfolioRef.current = portfolio;
@@ -181,24 +198,51 @@ export function AppDemo() {
     let w: WalletState | null = null;
     try { w = await connectWallet(); } catch { /* user rejected */ }
     if (!w) { setConnecting(null); return; }
+
+    // your tradable assets live INSIDE your Derive testnet account as
+    // collateral, not in the EOA - if this address owns (or signs for) a
+    // hosted account, show THOSE balances in the vault
+    setConnecting("checking your Derive testnet account…");
+    let acct: { sub: number | null; holdings: Holding[]; usdc: number } | null = null;
+    try {
+      const st = await hostedStatus(w.address);
+      if (st.enrolled && (st.collaterals?.length ?? 0) > 0) {
+        const round4 = (x: number) => Math.round(x * 10_000) / 10_000;
+        acct = {
+          sub: st.subaccount_id ?? null,
+          holdings: st.collaterals!
+            .filter((c) => c.asset !== "USDC" && c.amount > 0)
+            .map((c) => ({ symbol: c.asset, qty: round4(c.amount) })),
+          usdc: Math.round((st.collaterals!.find((c) => c.asset === "USDC")?.amount ?? 0) * 100) / 100,
+        };
+      }
+    } catch { /* no hosted account or endpoint hiccup - keep on-chain view */ }
+
     setConnecting("structuring suggested trades for your portfolio…");
+    setDeriveAcct(acct);
     setWallet(w);
-    const owned = w.holdings.filter((h) => h.qty > 0);
+    const tradable = acct ? acct.holdings : w.holdings;
+    const owned = tradable.filter((h) => h.qty > 0);
     const seen = owned.map((h) => `${h.qty.toLocaleString()} ${h.symbol}`).join(", ");
+    const usdcSeen = acct ? acct.usdc : w.usdc;
     const best = owned
-      .filter((h) => asset(h.symbol).live)
+      .filter((h) => ASSETS.some((a) => a.symbol === h.symbol) && asset(h.symbol).live)
       .sort((a, b) => b.qty * asset(b.symbol).spot - a.qty * asset(a.symbol).spot)[0];
     setMessages((m) => [
       ...m,
       {
         role: "agent",
-        text: owned.length
-          ? `Connected ${shortAddr(w!.address)} (read-only). I can see ${seen}${w!.usdc > 0 ? ` and $${w!.usdc.toLocaleString()} USDC` : ""}.${
+        text: owned.length || (acct && usdcSeen > 0)
+          ? `Connected ${shortAddr(w!.address)} (read-only).${
+              acct
+                ? ` Found your Derive testnet account${acct.sub != null ? ` (subaccount ${acct.sub})` : ""} - the vault shows what's in it${seen ? `: ${seen}` : ""}${usdcSeen > 0 ? `${seen ? " and" : ":"} $${usdcSeen.toLocaleString()} USDC` : ""}. That's what the agent trades; your wallet's own balances are listed separately below it.`
+                : ` I can see ${seen}${usdcSeen > 0 ? ` and $${usdcSeen.toLocaleString()} USDC` : ""}.`
+            }${
               best
                 ? ` Your largest holding is ${best.symbol}, so I've structured a suggested trade on it - the ticket is live. Approve & deploy, or tell me what you'd rather do.`
                 : " Every ticket is now sized to what you actually hold."
             }`
-          : `Connected ${shortAddr(w!.address)} (read-only), but your balances read zero on this ${w!.chainId === 1 ? "wallet" : "network (switch to Ethereum mainnet for token balances)"} - your portfolio shows the zeros, and tickets are previews sized to 1 unit until you hold something.`,
+          : `Connected ${shortAddr(w!.address)} (read-only), but your balances read zero on this ${w!.chainId === 1 ? "wallet" : "network (switch to Ethereum mainnet for token balances)"} and I didn't find a Derive testnet account for this address - your portfolio shows the zeros, and tickets are previews sized to 1 unit until you hold something.`,
       },
     ]);
   }, []);
@@ -207,8 +251,9 @@ export function AppDemo() {
   // current asset, resized), then clear the connect progress strip
   useEffect(() => {
     if (!wallet) return;
-    const best = wallet.holdings
-      .filter((h) => h.qty > 0 && asset(h.symbol).live)
+    const tradable = deriveAcct ? deriveAcct.holdings : wallet.holdings;
+    const best = tradable
+      .filter((h) => h.qty > 0 && ASSETS.some((a) => a.symbol === h.symbol) && asset(h.symbol).live)
       .sort((a, b) => b.qty * asset(b.symbol).spot - a.qty * asset(a.symbol).spot)[0];
     structure(best ? best.symbol : selected, pickedId ?? "income", {}, "silent");
     later(700, () => setConnecting(null));
@@ -473,9 +518,12 @@ export function AppDemo() {
               <StrategyRail
                 symbol={selected} activeId={pickedId}
                 onPick={(id) => structure(selected, id)}
-                holdings={portfolio} usdc={wallet?.usdc ?? 0}
+                holdings={portfolio}
+                usdc={deriveAcct ? deriveAcct.usdc : wallet?.usdc ?? 0}
                 walletLabel={wallet ? shortAddr(wallet.address) : null}
                 onSelectAsset={onSelectAsset} selected={selected}
+                vaultLabel={deriveAcct ? `${deriveAcct.sub != null ? `subaccount ${deriveAcct.sub}` : "live"}` : null}
+                walletHoldings={deriveAcct && wallet ? wallet.holdings : null}
               />
             </div>
 
