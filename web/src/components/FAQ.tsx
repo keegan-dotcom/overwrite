@@ -36,7 +36,7 @@ export function FAQ() {
       <div className="mx-auto max-w-3xl px-5">
         <SectionHead
           no="05"
-          kicker="Correspondence"
+          kicker="FAQ"
           title={<>Questions people actually ask<span className="text-accent">.</span></>}
         />
         <div className="mt-10 border-2 border-paper bg-ink shadow-hard">

@@ -15,8 +15,17 @@ async function post(path: string, body: unknown): Promise<any> {
   return r.json();
 }
 
+export type HostedPosition = {
+  instrument: string; amount: number; mark: number;
+  avg_price: number; unrealized_pnl: number; delta: number;
+};
+export type HostedOrder = {
+  instrument: string; direction: string; amount: number;
+  filled: number; price: number; label: string; ts: number;
+};
 export type HostedStatus = {
   enrolled: boolean;
+  derive_wallet?: string;
   status?: "awaiting_registration" | "active" | "paused" | "error";
   subaccount_id?: number;
   session_key_address?: string;
@@ -25,6 +34,11 @@ export type HostedStatus = {
   last_error?: string | null;
   ledger?: { ts: string; kind: string; instrument: string; usd: number }[];
   cycles?: { ts: string; ok: boolean; msg: string }[];
+  // live venue snapshot (present when the fleet key is active)
+  positions?: HostedPosition[];
+  open_orders?: HostedOrder[];
+  collaterals?: { asset: string; amount: number; value_usd: number }[];
+  equity_usd?: number;
 };
 
 export const hostedEnroll = (ownerEoa: string, deriveWallet: string) =>

@@ -6,7 +6,7 @@ import { parseIntent } from "../lib/intent";
 import { RunItYourself } from "../components/app/RunItYourself";
 import { TestnetPanel } from "../components/app/TestnetPanel";
 import { HostedPanel } from "../components/app/HostedPanel";
-import { Dashboard } from "./Dashboard";
+import { Console } from "../components/app/Console";
 import { VENUES, VenueMode } from "../data/venues";
 import { StrategyRail } from "../components/app/StrategyRail";
 import { TradeTicket } from "../components/app/TradeTicket";
@@ -430,7 +430,7 @@ export function AppDemo() {
         </div>
 
         {view === "console" ? (
-          <div className="min-h-0 flex-1 overflow-y-auto"><Dashboard embedded /></div>
+          <div className="min-h-0 flex-1 overflow-y-auto"><Console ownerEoa={wallet?.address ?? null} /></div>
         ) : (
           <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-[230px_minmax(0,1fr)_360px] lg:grid-rows-[minmax(0,1fr)]">
             {/* left rail */}

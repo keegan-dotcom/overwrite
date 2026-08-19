@@ -34,8 +34,8 @@ export function HowItWorks() {
       <div className="mx-auto max-w-6xl px-5">
         <SectionHead
           no="02"
-          kicker="The loop"
-          title={<>A patient seller that never sleeps<span className="text-accent">.</span></>}
+          kicker="How it works"
+          title={<>Options trading, made easy<span className="text-accent">.</span></>}
         />
         <div className="mt-12 grid border-2 border-paper bg-darkline gap-px md:grid-cols-4">
           {steps.map((s, i) => (

@@ -47,7 +47,7 @@ export function Hero() {
           <div>
             <Reveal>
               <p className="mb-6 inline-block border-2 border-paper bg-ink px-3 py-1 font-mono text-[12px] uppercase tracking-[0.2em] text-paper">
-                MODE: <span className="text-accent font-bold">OVR</span> — insert is for buyers
+                <span className="text-accent font-bold">Automated covered calls</span> — yield on assets you already hold
               </p>
             </Reveal>
             <Reveal delay={1}>
@@ -88,7 +88,7 @@ export function Hero() {
                   href="#honest"
                   className="border-2 border-paper bg-ink px-6 py-3 text-paper shadow-hard transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
                 >
-                  See the honest numbers
+                  See expected returns
                 </a>
               </div>
             </Reveal>

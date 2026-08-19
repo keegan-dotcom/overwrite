@@ -17,16 +17,16 @@ export function Footer() {
               <p className="border-b border-darkline pb-2 text-[11px] uppercase tracking-[0.2em] text-dfog">Product</p>
               <ul className="mt-3 space-y-2">
                 <li><a className="hover:text-accent" href="/app">The app</a></li>
-                <li><a className="hover:text-accent" href="/#products">The products</a></li>
+                <li><a className="hover:text-accent" href="/#products">Products</a></li>
                 <li><a className="hover:text-accent" href="/#waitlist">Hosted waitlist</a></li>
               </ul>
             </div>
             <div>
               <p className="border-b border-darkline pb-2 text-[11px] uppercase tracking-[0.2em] text-dfog">Read</p>
               <ul className="mt-3 space-y-2">
-                <li><a className="hover:text-accent" href="/#honest">The honest part</a></li>
-                <li><a className="hover:text-accent" href="/#safety">The rails</a></li>
-                <li><a className="hover:text-accent" href="/#how">The loop</a></li>
+                <li><a className="hover:text-accent" href="/#honest">Expected returns</a></li>
+                <li><a className="hover:text-accent" href="/#safety">Security</a></li>
+                <li><a className="hover:text-accent" href="/#how">How it works</a></li>
               </ul>
             </div>
             <div>

@@ -37,7 +37,7 @@ export function Products() {
       <SectionHead
         no="01"
         kicker="The products"
-        title={<>One engine, three ways in<span className="text-accent">.</span></>}
+        title={<>Advanced options strategies, automated for everyone<span className="text-accent">.</span></>}
       />
       <div className="mt-12 grid gap-6 lg:grid-cols-3">
         {CARDS.map((c, i) => (

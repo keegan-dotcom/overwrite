@@ -10,7 +10,7 @@ export function Honest() {
           <div className="rule-double pt-5">
             <div className="flex items-baseline gap-4 font-mono text-[12px] uppercase tracking-[0.2em] text-fog">
               <span className="font-bold text-amber">№ 04</span>
-              <span>The part everyone else hides</span>
+              <span>Risk &amp; return disclosure</span>
             </div>
             <h2 className="mt-4 max-w-3xl font-display text-4xl uppercase leading-[0.98] text-paper sm:text-6xl">
               Premium yield is <span className="text-amber">not</span> total return.
