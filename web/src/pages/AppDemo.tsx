@@ -3,14 +3,14 @@ import { asset, strategy, Quote, DEMO_PORTFOLIO, roundStrike, ASSETS, STRATEGIES
 import { connectWallet, hasWallet, shortAddr, WalletState } from "../lib/wallet";
 import { callPrice, strikeForYield, fmtUsd, fmtPct } from "../lib/options";
 import { parseIntent } from "../lib/intent";
-import { VaultPanel } from "../components/app/VaultPanel";
 import { RunItYourself } from "../components/app/RunItYourself";
 import { TestnetPanel } from "../components/app/TestnetPanel";
 import { HostedPanel } from "../components/app/HostedPanel";
 import { Dashboard } from "./Dashboard";
 import { VENUES, VenueMode } from "../data/venues";
-import { StrategyShelf } from "../components/app/StrategyShelf";
+import { StrategyRail } from "../components/app/StrategyRail";
 import { TradeTicket } from "../components/app/TradeTicket";
+import { Modal } from "../components/app/Modal";
 import { IntentChat } from "../components/app/IntentChat";
 import { AgentFeed } from "../components/app/AgentFeed";
 import type { ChatMsg, FeedEvent, Position, Suggestion } from "../components/app/types";
@@ -83,35 +83,6 @@ async function fetchLlmIntent(message: string, lastIntent: unknown): Promise<Inc
   } catch {
     return null;
   }
-}
-
-function AssetStrip({ selected, onSelect }: { selected: string; onSelect: (s: string) => void }) {
-  return (
-    <div className="flex flex-wrap gap-2">
-      {ASSETS.map((a) => {
-        const on = a.symbol === selected;
-        return (
-          <button
-            key={a.symbol}
-            onClick={() => onSelect(a.symbol)}
-            className={`border-2 px-3 py-1.5 font-mono text-[12px] transition-colors ${
-              on
-                ? "border-mint bg-pane text-mint"
-                : a.live
-                ? "border-line text-paper hover:border-fog"
-                : "border-line text-fog hover:border-fog"
-            }`}
-            aria-pressed={on}
-          >
-            <span className="font-bold">{a.symbol}</span>
-            <span className={`ml-2 ${on ? "text-mint/70" : "text-fog"}`}>{fmtUsd(a.spot)}</span>
-            {on && <span className="ml-2 text-mint/70">IV {fmtPct(a.iv, 0)}</span>}
-            {!a.live && <span className="ml-2 text-[9px] uppercase tracking-[0.08em] text-amber">soon</span>}
-          </button>
-        );
-      })}
-    </div>
-  );
 }
 
 const HELLO: ChatMsg = {
@@ -385,114 +356,146 @@ export function AppDemo() {
     setSuggestion(null);
   }, []);
 
+
+  const [manage, setManage] = useState<null | "hosted" | "browser" | "self">(null);
+  const [feedOpen, setFeedOpen] = useState(false);
+  const lastFeed = feed.length ? feed[feed.length - 1] : null;
+
+  const manageButtons = (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="font-mono text-[11px] font-bold uppercase text-mint">✓ deployed · run it:</span>
+      {wallet && venueMode === "v2" && (
+        <button onClick={() => setManage("hosted")}
+          className="border-2 border-paper bg-accent px-2.5 py-1 font-mono text-[11px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px">
+          24/7 hosted
+        </button>
+      )}
+      {wallet && venueMode === "v2" && (
+        <button onClick={() => setManage("browser")}
+          className="border-2 border-amber px-2.5 py-1 font-mono text-[11px] uppercase text-amber transition-colors hover:bg-amber hover:text-ink">
+          browser order
+        </button>
+      )}
+      <button onClick={() => setManage("self")}
+        className="border-2 border-line px-2.5 py-1 font-mono text-[11px] uppercase text-fog transition-colors hover:border-fog hover:text-paper">
+        self-host
+      </button>
+    </div>
+  );
+
   return (
-    <main className="min-h-screen bg-ink px-4 pb-16 pt-24 sm:px-6">
-      <div className="mx-auto max-w-[1400px]">
-        {/* header */}
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b-2 border-line pb-4">
-          <div>
-            <h1 className="font-display text-3xl uppercase tracking-wide text-paper sm:text-4xl">
-              Overwrite <span className="text-mint">App</span>
-            </h1>
-            <p className="mt-1 max-w-2xl font-serif text-[14px] leading-snug text-fog">
-              Intent-based options for people who don't speak greeks. Pick a
-              strategy off the shelf or just say what you want - the agent
-              structures it, disclosures first, and manages it from your own
-              isolated vault.
-            </p>
+    <main className="bg-ink px-3 pb-3 pt-16 lg:h-screen lg:overflow-hidden">
+      <div className="mx-auto flex h-full max-w-[1500px] flex-col">
+        {/* top bar: tabs · assets · venue · wallet */}
+        <div className="mb-2 flex flex-wrap items-center gap-2 border-2 border-line bg-pane px-2 py-1.5">
+          <div className="flex font-mono text-[11px] uppercase tracking-[0.08em]">
+            {([["trade", "Trade desk"], ["console", "Console"]] as const).map(([id, label]) => (
+              <button key={id} onClick={() => setView(id)}
+                className={`border-2 px-3 py-1 transition-colors ${
+                  view === id ? "border-mint bg-ink font-bold text-mint" : "border-transparent text-fog hover:text-paper"
+                }`}>
+                {label}
+              </button>
+            ))}
           </div>
-          <div className="flex flex-col items-end gap-1.5 font-mono text-[10.5px] uppercase tracking-[0.12em]">
-            <div className="flex items-center gap-2">
-              {hasWallet() && (
-                <button
-                  onClick={onConnect}
-                  className={`border-2 px-2.5 py-0.5 transition-colors ${
-                    wallet
-                      ? "border-mint text-mint"
-                      : "border-paper bg-accent font-bold text-ink shadow-hardsm hover:-translate-x-px hover:-translate-y-px"
-                  }`}
-                >
-                  {wallet ? `${shortAddr(wallet.address)} · live balances` : "Connect wallet"}
+          <div className="h-5 w-px bg-line" />
+          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+            {ASSETS.map((a) => {
+              const on = a.symbol === selected;
+              return (
+                <button key={a.symbol} onClick={() => onSelectAsset(a.symbol)}
+                  className={`shrink-0 border px-2 py-1 font-mono text-[11px] transition-colors ${
+                    on ? "border-mint text-mint" : a.live ? "border-transparent text-paper hover:border-line" : "border-transparent text-fog"
+                  }`}>
+                  <span className="font-bold">{a.symbol}</span>
+                  {on && <span className="ml-1.5 text-mint/70">{fmtUsd(a.spot)} · IV {fmtPct(a.iv, 0)}</span>}
+                  {!a.live && <span className="ml-1 text-[8px] uppercase text-amber">soon</span>}
                 </button>
-              )}
-              <span className="border-2 border-amber px-2 py-0.5 text-amber">demo · simulated pricing</span>
-            </div>
-            <label className="flex items-center gap-2 text-fog">
-              venue
-              <select
-                value={venueMode}
-                onChange={(e) => setVenueMode(e.target.value as VenueMode)}
-                className="border-2 border-line bg-ink px-2 py-1 font-mono text-[11px] uppercase tracking-[0.08em] text-mint focus:border-mint focus:outline-none"
-              >
-                {Object.values(VENUES).map((v) => (
-                  <option key={v.id} value={v.id}>{v.label}</option>
-                ))}
-              </select>
-            </label>
-            <span className="text-fog">{VENUES[venueMode].endpoint} · BTC ETH HYPE live · equities on listing</span>
+              );
+            })}
           </div>
-        </div>
-
-        {/* view switch: the one app holds both the trade desk and the console */}
-        <div className="mb-5 flex gap-0 border-2 border-line bg-pane font-mono text-[12px] uppercase tracking-[0.1em]">
-          {([["trade", "Trade desk"], ["console", "Agent console"]] as const).map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => setView(id)}
-              aria-pressed={view === id}
-              className={`flex-1 border-r-2 border-line px-4 py-2.5 transition-colors last:border-r-0 ${
-                view === id ? "bg-ink font-bold text-mint shadow-[inset_0_-2px_0_0_#3DFFA8]" : "text-fog hover:bg-ink/60 hover:text-paper"
-              }`}
-            >
-              {label}
+          <select value={venueMode} onChange={(e) => setVenueMode(e.target.value as VenueMode)}
+            className="border border-line bg-ink px-1.5 py-1 font-mono text-[10px] uppercase text-mint focus:border-mint focus:outline-none">
+            {Object.values(VENUES).map((v) => <option key={v.id} value={v.id}>{v.short === "v2" ? "v2 testnet" : "V3 preview"}</option>)}
+          </select>
+          {hasWallet() && (
+            <button onClick={onConnect}
+              className={`border-2 px-2.5 py-1 font-mono text-[10.5px] uppercase transition-colors ${
+                wallet ? "border-mint text-mint" : "border-paper bg-accent font-bold text-ink shadow-hardsm"
+              }`}>
+              {wallet ? `${shortAddr(wallet.address)}` : "Connect wallet"}
             </button>
-          ))}
+          )}
+          <span className="border border-amber px-1.5 py-1 font-mono text-[9px] uppercase text-amber">demo pricing</span>
         </div>
 
-        {view === "console" && <Dashboard embedded />}
-
-        <div className={view === "trade" ? "grid gap-4 lg:grid-cols-12" : "hidden"}>
-          {/* left: vault + feed */}
-          <div className="space-y-4 lg:col-span-3">
-            <VaultPanel selected={selected} onSelect={onSelectAsset} positions={positions} vaultNote={VENUES[venueMode].vaultNote} holdings={portfolio} usdc={wallet?.usdc ?? 0} walletLabel={wallet && wallet.holdings.length ? shortAddr(wallet.address) : null} />
-            <div className="hidden lg:block">
-              <AgentFeed positions={positions} feed={feed} suggestion={suggestion} onAccept={onAccept} onDismiss={onDismiss} />
+        {view === "console" ? (
+          <div className="min-h-0 flex-1 overflow-y-auto"><Dashboard embedded /></div>
+        ) : (
+          <div className="grid min-h-0 flex-1 gap-2 lg:grid-cols-[230px_minmax(0,1fr)_360px] lg:grid-rows-[minmax(0,1fr)]">
+            {/* left rail */}
+            <div className="min-h-0 max-lg:max-h-96">
+              <StrategyRail
+                symbol={selected} activeId={pickedId}
+                onPick={(id) => structure(selected, id)}
+                holdings={portfolio} usdc={wallet?.usdc ?? 0}
+                walletLabel={wallet && wallet.holdings.length ? shortAddr(wallet.address) : null}
+                onSelectAsset={onSelectAsset} selected={selected}
+              />
             </div>
-          </div>
 
-          {/* center: the workbench - asset, strategy, ticket */}
-          <div className="space-y-3 lg:col-span-5">
-            <AssetStrip selected={selected} onSelect={onSelectAsset} />
-            <StrategyShelf symbol={selected} activeId={pickedId} onPick={(id) => structure(selected, id)} />
-            <div ref={ticketRef} className="space-y-3">
-              {ticket && (
-                <TradeTicket q={ticket} qty={ticketQty} onDeploy={onDeploy} deployed={deployedTicket} venueMode={venueMode} />
-              )}
-              {ticket && deployedTicket && wallet && venueMode === "v2" && (
-                <HostedPanel ownerEoa={wallet.address} />
-              )}
-              {ticket && deployedTicket && wallet && venueMode === "v2" && (
-                <TestnetPanel q={ticket} qty={ticketQty} ownerEoa={wallet.address} />
-              )}
-              {ticket && deployedTicket && (
-                <RunItYourself q={ticket} qty={ticketQty} mode={venueMode} />
-              )}
+            {/* center: hero ticket + status strip */}
+            <div className="flex min-h-0 flex-col gap-2">
+              <div ref={ticketRef} className="min-h-0 flex-1">
+                {ticket && (
+                  <TradeTicket q={ticket} qty={ticketQty} onDeploy={onDeploy}
+                    deployed={deployedTicket} venueMode={venueMode}
+                    footerExtra={manageButtons} />
+                )}
+              </div>
+              <button onClick={() => setFeedOpen(true)}
+                className="flex shrink-0 items-center gap-2 border-2 border-line bg-pane px-3 py-1.5 text-left font-mono text-[11px] transition-colors hover:border-fog">
+                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-mint" />
+                <span className="text-fog">agent</span>
+                <span className="text-paper">{positions.length} open</span>
+                {suggestion && <span className="border border-amber px-1 text-[9.5px] uppercase text-amber">1 suggestion</span>}
+                <span className="min-w-0 flex-1 truncate text-fog">
+                  {lastFeed ? `${lastFeed.ts} ${lastFeed.text}` : "the loop starts when you deploy"}
+                </span>
+                <span className="text-fog">▸</span>
+              </button>
             </div>
-          </div>
 
-          {/* right: chat */}
-          <div className="lg:col-span-4">
-            <div className="lg:sticky lg:top-20">
+            {/* right: chat */}
+            <div className="min-h-0 max-lg:h-[480px]">
               <IntentChat messages={messages} onSend={onSend} thinking={thinking} defaultsNote={defaultsNote} />
             </div>
           </div>
-
-          {/* feed on mobile */}
-          <div className="lg:hidden">
-            <AgentFeed positions={positions} feed={feed} suggestion={suggestion} onAccept={onAccept} onDismiss={onDismiss} />
-          </div>
-        </div>
+        )}
       </div>
+
+      {/* overlays */}
+      {feedOpen && (
+        <Modal title="Agent · active management" onClose={() => setFeedOpen(false)}>
+          <AgentFeed positions={positions} feed={feed} suggestion={suggestion}
+            onAccept={() => { onAccept(); }} onDismiss={onDismiss} />
+        </Modal>
+      )}
+      {manage === "hosted" && wallet && (
+        <Modal title="Run it 24/7 · hosted pilot" onClose={() => setManage(null)}>
+          <HostedPanel ownerEoa={wallet.address} />
+        </Modal>
+      )}
+      {manage === "browser" && wallet && ticket && (
+        <Modal title="Place it from this browser" onClose={() => setManage(null)}>
+          <TestnetPanel q={ticket} qty={ticketQty} ownerEoa={wallet.address} />
+        </Modal>
+      )}
+      {manage === "self" && ticket && (
+        <Modal title="Self-host the agent" onClose={() => setManage(null)}>
+          <RunItYourself q={ticket} qty={ticketQty} mode={venueMode} />
+        </Modal>
+      )}
     </main>
   );
 }

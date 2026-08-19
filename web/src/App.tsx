@@ -5,6 +5,13 @@ import { Footer } from "./components/Footer";
 import { Landing } from "./pages/Landing";
 import { AppDemo } from "./pages/AppDemo";
 
+/* The trade desk is a one-screen app - no marketing footer under it. */
+function FooterGate() {
+  const { pathname } = useLocation();
+  if (pathname.startsWith("/app")) return null;
+  return <Footer />;
+}
+
 function ScrollManager() {
   const { pathname, hash } = useLocation();
   useEffect(() => {
@@ -27,7 +34,7 @@ export default function App() {
         <Route path="/dashboard" element={<Navigate to="/app" replace />} />
         <Route path="/app" element={<AppDemo />} />
       </Routes>
-      <Footer />
+      <FooterGate />
     </>
   );
 }

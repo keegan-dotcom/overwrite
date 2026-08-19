@@ -24,10 +24,7 @@ export function AgentFeed({
 }) {
   return (
     <div className="border-2 border-line bg-pane">
-      <div className="flex items-center justify-between border-b-2 border-line px-4 py-2.5">
-        <div className="font-mono text-[11px] uppercase tracking-[0.14em] text-fog">
-          Agent · active management
-        </div>
+      <div className="flex items-center justify-end border-b border-line px-4 py-1.5">
         <div className="flex items-center gap-1.5 font-mono text-[10.5px] uppercase text-mint">
           <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-mint" />
           watching
