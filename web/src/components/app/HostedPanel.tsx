@@ -129,7 +129,9 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
                 testnet.derive.xyz
               </a>{" "}
               → Developers → <em>Register Session Key</em> → paste the address
-              above (scope: admin, any expiry) → Derive pays the gas. Then:
+              above (scope: admin, any expiry, and keep the name ≤16 characters
+              — e.g. "Overwrite Fleet" — their name field errors on longer) →
+              Derive pays the gas. Then:
             </div>
             <div className="flex flex-wrap gap-2">
               <button onClick={checkActivation} disabled={busy}
