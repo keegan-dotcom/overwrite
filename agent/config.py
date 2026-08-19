@@ -162,6 +162,16 @@ def load_config(path: str | Path) -> AgentConfig:
 
     derive_raw = dict(raw.get("derive", {}))
     derive_raw.setdefault("environment", "test")
+    # TESTNET-ONLY HARD GATE: mainnet ("prod") is refused unless the operator
+    # sets OVERWRITE_ALLOW_MAINNET=1 in the environment. A YAML typo, a copied
+    # config, or a prompt-injected edit can never silently point the agent at
+    # real money.
+    if derive_raw.get("environment") == "prod" and os.environ.get("OVERWRITE_ALLOW_MAINNET") != "1":
+        raise ValueError(
+            "config sets derive.environment=prod (MAINNET, real funds) but "
+            "OVERWRITE_ALLOW_MAINNET=1 is not set. Overwrite is a testnet pilot; "
+            "set the env var explicitly if you truly intend to trade real money."
+        )
     if "extra_fee" in derive_raw:
         derive_raw["extra_fee"] = _dec(derive_raw["extra_fee"])
     # secrets come from env, never YAML

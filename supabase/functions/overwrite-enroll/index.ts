@@ -13,9 +13,21 @@ import {
   CORS, json, sb, newSessionKey, encryptPk, decryptPk, authHeaders, rpc,
 } from "../_shared/derive.ts";
 
+/* best-effort per-instance rate limit: 10 requests/min/IP */
+const hits = new Map<string, { n: number; t: number }>();
+function rateLimited(ip: string): boolean {
+  const now = Date.now();
+  const h = hits.get(ip);
+  if (!h || now - h.t > 60_000) { hits.set(ip, { n: 1, t: now }); return false; }
+  h.n += 1;
+  return h.n > 10;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  if (rateLimited(ip)) return json({ error: "rate_limited" }, 429);
   let body: any;
   try { body = await req.json(); } catch { return json({ error: "bad_json" }, 400); }
   const wallet = String(body.derive_wallet ?? "").trim();
@@ -30,6 +42,11 @@ Deno.serve(async (req) => {
     if (existing) {
       return json({ session_key_address: existing.session_key_address, status: existing.status });
     }
+    // cap enrollments per owner EOA: prevents spamming rows against someone
+    // else's address (their Console always resolves active-first regardless)
+    const { count } = await db.from("tenants")
+      .select("id", { count: "exact", head: true }).ilike("owner_eoa", owner);
+    if ((count ?? 0) >= 3) return json({ error: "too_many_enrollments_for_owner" }, 429);
     const { pk, address } = newSessionKey();
     const enc = await encryptPk(pk);
     const { error } = await db.from("tenants").insert({

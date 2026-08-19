@@ -129,7 +129,8 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
                 testnet.derive.xyz
               </a>{" "}
               → Developers → <em>Register Session Key</em> → paste the address
-              above (scope: admin, any expiry, and keep the name ≤16 characters
+              above (scope: <span className="font-bold">account</span> — trading
+              only, never withdrawals; any expiry; keep the name ≤16 characters
               — e.g. "Overwrite Fleet" — their name field errors on longer) →
               Derive pays the gas. Then:
             </div>

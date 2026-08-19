@@ -13,13 +13,25 @@ import {
 } from "../_shared/derive.ts";
 import { privateKeyToAccount } from "npm:viem@2/accounts";
 
-const FLEET_SECRET = "c50a22ca7fe917ff486219134dbd502f9915ab9c074f7565";
 const LABEL = "overwrite-hosted";
 const MAX_UTIL = 0.9;
 
+function timingSafeEq(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 Deno.serve(async (req) => {
-  if (req.headers.get("x-fleet-secret") !== FLEET_SECRET) return json({ error: "forbidden" }, 403);
   const db = sb();
+  // shared secret lives ONLY in the deny-all fleet_config table (never in
+  // code or the repo); the cron job reads the same row at fire time
+  const { data: cfgRow } = await db.from("fleet_config")
+    .select("value").eq("key", "fleet_secret").single();
+  const expected = cfgRow?.value ?? "";
+  const got = req.headers.get("x-fleet-secret") ?? "";
+  if (!expected || !timingSafeEq(got, expected)) return json({ error: "forbidden" }, 403);
   const { data: tenants } = await db.from("tenants")
     .select("*").eq("status", "active").eq("kill", false).limit(20);
   const results: Record<string, string> = {};

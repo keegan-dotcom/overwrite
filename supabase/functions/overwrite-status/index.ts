@@ -19,9 +19,11 @@ Deno.serve(async (req) => {
   let { data: t } = await db.from("tenants").select(sel)
     .ilike("derive_wallet", wallet).maybeSingle();
   if (!t) {
-    ({ data: t } = await db.from("tenants").select(sel)
-      .ilike("owner_eoa", wallet).order("created_at", { ascending: false })
-      .limit(1).maybeSingle());
+    // owner-EOA lookup: prefer the ACTIVE tenant, else the oldest, so a
+    // spam enrollment against someone's EOA can never shadow their account
+    const { data: rows } = await db.from("tenants").select(sel)
+      .ilike("owner_eoa", wallet).order("created_at", { ascending: true }).limit(10);
+    t = (rows ?? []).find((r) => r.status === "active") ?? (rows ?? [])[0] ?? null;
   }
   if (!t) return json({ enrolled: false });
   wallet = t.derive_wallet; // auth headers must use the Derive wallet

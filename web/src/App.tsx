@@ -4,6 +4,8 @@ import { Nav } from "./components/Nav";
 import { Footer } from "./components/Footer";
 import { Landing } from "./pages/Landing";
 import { AppDemo } from "./pages/AppDemo";
+import { Security } from "./pages/Security";
+import { Terms } from "./pages/Terms";
 
 /* The trade desk is a one-screen app - no marketing footer under it. */
 function FooterGate() {
@@ -33,6 +35,8 @@ export default function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/dashboard" element={<Navigate to="/app" replace />} />
         <Route path="/app" element={<AppDemo />} />
+        <Route path="/security" element={<Security />} />
+        <Route path="/terms" element={<Terms />} />
       </Routes>
       <FooterGate />
     </>

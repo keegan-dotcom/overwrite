@@ -7,6 +7,7 @@ import { RunItYourself } from "../components/app/RunItYourself";
 import { TestnetPanel } from "../components/app/TestnetPanel";
 import { HostedPanel } from "../components/app/HostedPanel";
 import { Console } from "../components/app/Console";
+import { TermsGate, termsAccepted } from "../components/app/TermsGate";
 import { VENUES, VenueMode } from "../data/venues";
 import { StrategyRail } from "../components/app/StrategyRail";
 import { TradeTicket } from "../components/app/TradeTicket";
@@ -110,6 +111,7 @@ export function AppDemo() {
   const [venueMode, setVenueMode] = useState<VenueMode>("v2");
   const [wallet, setWallet] = useState<WalletState | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
+  const [gated, setGated] = useState(() => !termsAccepted());
   const [view, setView] = useState<"trade" | "console">("trade");
   // Connected: show YOUR portfolio - real balances where we can read them,
   // zeros for the rest, so it's obvious the screen is no longer demo data.
@@ -508,6 +510,7 @@ export function AppDemo() {
       </div>
 
       {/* overlays */}
+      {gated && <TermsGate onAccept={() => setGated(false)} />}
       {feedOpen && (
         <Modal title="Agent · active management" onClose={() => setFeedOpen(false)}>
           <AgentFeed positions={positions} feed={feed} suggestion={suggestion}

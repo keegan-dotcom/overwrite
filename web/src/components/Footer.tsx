@@ -25,8 +25,9 @@ export function Footer() {
               <p className="border-b border-darkline pb-2 text-[11px] uppercase tracking-[0.2em] text-dfog">Read</p>
               <ul className="mt-3 space-y-2">
                 <li><a className="hover:text-accent" href="/#honest">Expected returns</a></li>
-                <li><a className="hover:text-accent" href="/#safety">Security</a></li>
                 <li><a className="hover:text-accent" href="/#how">How it works</a></li>
+                <li><a className="hover:text-accent" href="/security">Security review · audit results</a></li>
+                <li><a className="hover:text-accent" href="/terms">Terms of use</a></li>
               </ul>
             </div>
             <div>
