@@ -67,13 +67,14 @@ export function StrategyRail({
       <div className="max-h-40 overflow-y-auto border-t border-line">
         {holdings.map((h) => {
           const ha = asset(h.symbol);
+          const empty = h.qty <= 0;
           return (
             <button key={h.symbol} onClick={() => onSelectAsset(h.symbol)}
               className={`flex w-full items-center justify-between px-3 py-1.5 font-mono text-[11px] transition-colors ${
-                selected === h.symbol ? "bg-ink text-mint" : "text-paper hover:bg-ink/60"
+                selected === h.symbol ? "bg-ink text-mint" : empty ? "text-fog/70 hover:bg-ink/60" : "text-paper hover:bg-ink/60"
               }`}>
-              <span>{h.symbol} <span className="text-fog">{h.qty.toLocaleString()}</span></span>
-              <span className="text-fog">{fmtUsd(h.qty * ha.spot)}</span>
+              <span>{h.symbol} <span className="text-fog">{empty ? "0" : h.qty.toLocaleString()}</span></span>
+              <span className="text-fog">{empty ? "—" : fmtUsd(h.qty * ha.spot)}</span>
             </button>
           );
         })}

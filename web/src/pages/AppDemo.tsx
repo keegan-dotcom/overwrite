@@ -109,9 +109,16 @@ export function AppDemo() {
   const [defaultsNote, setDefaultsNote] = useState<string | null>(null);
   const [venueMode, setVenueMode] = useState<VenueMode>("v2");
   const [wallet, setWallet] = useState<WalletState | null>(null);
+  const [connecting, setConnecting] = useState<string | null>(null);
   const [view, setView] = useState<"trade" | "console">("trade");
-  const portfolio: Holding[] =
-    wallet && wallet.holdings.length ? wallet.holdings : DEMO_PORTFOLIO;
+  // Connected: show YOUR portfolio - real balances where we can read them,
+  // zeros for the rest, so it's obvious the screen is no longer demo data.
+  const portfolio: Holding[] = wallet
+    ? DEMO_PORTFOLIO.map((d) => ({
+        symbol: d.symbol,
+        qty: wallet.holdings.find((h) => h.symbol === d.symbol)?.qty ?? 0,
+      }))
+    : DEMO_PORTFOLIO;
   const portfolioRef = useRef<Holding[]>(DEMO_PORTFOLIO);
   portfolioRef.current = portfolio;
 
@@ -135,7 +142,8 @@ export function AppDemo() {
     // saved defaults fill gaps; anything explicit wins
     const merged = { ...prefsRef.current, ...params };
     const q = s.quote(a, merged);
-    const qty = qtyIn(portfolioRef.current, sym);
+    const held = qtyIn(portfolioRef.current, sym);
+    const qty = held > 0 ? held : 1; // zero balance -> preview sized to 1 unit
     setSelected(sym);
     setPickedId(stratId);
     setTicket(q);
@@ -167,26 +175,41 @@ export function AppDemo() {
   }, [structure, pickedId]);
 
   const onConnect = useCallback(async () => {
-    const w = await connectWallet();
-    if (!w) return;
+    setConnecting("reading your wallet balances…");
+    let w: WalletState | null = null;
+    try { w = await connectWallet(); } catch { /* user rejected */ }
+    if (!w) { setConnecting(null); return; }
+    setConnecting("structuring suggested trades for your portfolio…");
     setWallet(w);
-    const seen = w.holdings.map((h) => `${h.qty.toLocaleString()} ${h.symbol}`).join(", ");
+    const owned = w.holdings.filter((h) => h.qty > 0);
+    const seen = owned.map((h) => `${h.qty.toLocaleString()} ${h.symbol}`).join(", ");
+    const best = owned
+      .filter((h) => asset(h.symbol).live)
+      .sort((a, b) => b.qty * asset(b.symbol).spot - a.qty * asset(a.symbol).spot)[0];
     setMessages((m) => [
       ...m,
       {
         role: "agent",
-        text: w.holdings.length
-          ? `Connected ${shortAddr(w.address)} (read-only). I can see ${seen}${w.usdc > 0 ? ` and $${w.usdc.toLocaleString()} USDC` : ""} - every strategy below is now sized to what you actually hold.`
-          : `Connected ${shortAddr(w.address)} (read-only), but I don't see ETH or WBTC on this ${w.chainId === 1 ? "wallet" : "network (switch to Ethereum mainnet for token balances)"} - showing the demo portfolio instead.`,
+        text: owned.length
+          ? `Connected ${shortAddr(w!.address)} (read-only). I can see ${seen}${w!.usdc > 0 ? ` and $${w!.usdc.toLocaleString()} USDC` : ""}.${
+              best
+                ? ` Your largest holding is ${best.symbol}, so I've structured a suggested trade on it - the ticket is live. Approve & deploy, or tell me what you'd rather do.`
+                : " Every ticket is now sized to what you actually hold."
+            }`
+          : `Connected ${shortAddr(w!.address)} (read-only), but your balances read zero on this ${w!.chainId === 1 ? "wallet" : "network (switch to Ethereum mainnet for token balances)"} - your portfolio shows the zeros, and tickets are previews sized to 1 unit until you hold something.`,
       },
     ]);
   }, []);
 
-  // resize the current ticket to live holdings once a wallet connects
+  // once a wallet connects: re-quote on the largest live holding (or keep the
+  // current asset, resized), then clear the connect progress strip
   useEffect(() => {
-    if (wallet && wallet.holdings.length) {
-      structure(selected, pickedId ?? "income", {}, "silent");
-    }
+    if (!wallet) return;
+    const best = wallet.holdings
+      .filter((h) => h.qty > 0 && asset(h.symbol).live)
+      .sort((a, b) => b.qty * asset(b.symbol).spot - a.qty * asset(a.symbol).spot)[0];
+    structure(best ? best.symbol : selected, pickedId ?? "income", {}, "silent");
+    later(700, () => setConnecting(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet]);
 
@@ -419,15 +442,25 @@ export function AppDemo() {
             {Object.values(VENUES).map((v) => <option key={v.id} value={v.id}>{v.short === "v2" ? "v2 testnet" : "V3 preview"}</option>)}
           </select>
           {hasWallet() && (
-            <button onClick={onConnect}
+            <button onClick={onConnect} disabled={!!connecting}
               className={`border-2 px-2.5 py-1 font-mono text-[10.5px] uppercase transition-colors ${
                 wallet ? "border-mint text-mint" : "border-paper bg-accent font-bold text-ink shadow-hardsm"
-              }`}>
-              {wallet ? `${shortAddr(wallet.address)}` : "Connect wallet"}
+              } disabled:opacity-70`}>
+              {connecting ? "connecting…" : wallet ? `${shortAddr(wallet.address)}` : "Connect wallet"}
             </button>
           )}
           <span className="border border-amber px-1.5 py-1 font-mono text-[9px] uppercase text-amber">demo pricing</span>
         </div>
+
+        {/* wallet-sync progress strip */}
+        {connecting && (
+          <div className="mb-2 flex items-center gap-2 border-2 border-mint bg-pane px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-mint">
+            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-mint" />
+            {connecting}
+            <span className="flex-1" />
+            <span className="text-fog normal-case">read-only · no signatures</span>
+          </div>
+        )}
 
         {view === "console" ? (
           <div className="min-h-0 flex-1 overflow-y-auto"><Console ownerEoa={wallet?.address ?? null} /></div>
@@ -439,7 +472,7 @@ export function AppDemo() {
                 symbol={selected} activeId={pickedId}
                 onPick={(id) => structure(selected, id)}
                 holdings={portfolio} usdc={wallet?.usdc ?? 0}
-                walletLabel={wallet && wallet.holdings.length ? shortAddr(wallet.address) : null}
+                walletLabel={wallet ? shortAddr(wallet.address) : null}
                 onSelectAsset={onSelectAsset} selected={selected}
               />
             </div>

@@ -56,7 +56,9 @@ export async function connectWallet(): Promise<WalletState | null> {
     method: "eth_getBalance", params: [address, "latest"],
   })) as string;
   const ethQty = hexToFloat(ethBal, 18);
-  if (ethQty > 0) holdings.push({ symbol: "ETH", qty: round(ethQty) });
+  // zero balances are included on purpose: the UI shows YOUR portfolio,
+  // zeros and all, so it's obvious the screen switched off demo data
+  holdings.push({ symbol: "ETH", qty: round(ethQty) });
 
   if (chainId === 1) {
     for (const t of TOKENS) {
@@ -67,7 +69,7 @@ export async function connectWallet(): Promise<WalletState | null> {
         })) as string;
         const qty = hexToFloat(raw, t.decimals);
         if (t.symbol === "USDC") usdc = round(qty);
-        else if (qty > 0) holdings.push({ symbol: t.symbol, qty: round(qty) });
+        else holdings.push({ symbol: t.symbol, qty: round(qty) });
       } catch { /* token read failed - skip */ }
     }
   }
