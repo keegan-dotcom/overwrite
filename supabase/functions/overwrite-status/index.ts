@@ -3,10 +3,20 @@
  * is active - the server holds the trading-scoped session key, so the web
  * Console can show the real account without any client-side signing.
  * Public read-only by design (testnet pilot). */
-import { CORS, json, sb, decryptPk, authHeaders, rpc } from "../_shared/derive.ts";
+import { CORS, json, sb, decryptPk, authHeaders, rpc, ENV } from "../_shared/derive.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  // MAINNET: real-money positions are not public. Reads require the console
+  // key from the deny-all fleet_config table (x-console-key header or ?key=).
+  // Testnet stays open by design (documented on /security).
+  if (ENV === "prod") {
+    const { data: ck } = await sb().from("fleet_config")
+      .select("value").eq("key", "console_key").single();
+    const supplied = req.headers.get("x-console-key")
+      ?? new URL(req.url).searchParams.get("key") ?? "";
+    if (!ck?.value || supplied !== ck.value) return json({ error: "forbidden" }, 403);
+  }
   const url = new URL(req.url);
   let wallet = url.searchParams.get("wallet") ?? "";
   if (!wallet && req.method === "POST") {

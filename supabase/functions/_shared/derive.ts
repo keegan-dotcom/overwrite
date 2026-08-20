@@ -7,14 +7,23 @@ import { encodeAbiParameters, keccak256, getAddress, type Hex } from "npm:viem@2
 import { generatePrivateKey, privateKeyToAccount } from "npm:viem@2/accounts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-export const BASE = "https://api-demo.lyra.finance";
-export const DOMAIN_SEPARATOR = "0x9bcf4dc06df5d8bf23af818d5716491b995020f377d3b7b64c29ed14e3dd1105" as Hex;
+/* ---- environment: testnet by default; mainnet ONLY when the operator has
+ * set DERIVE_ENV=prod as a function secret. Constants from the Protocol
+ * Constants table at docs.derive.xyz; the prod set is golden-tested against
+ * the official python lib in scripts/golden_check_prod.mts. ---- */
+export const ENV: "test" | "prod" = Deno.env.get("DERIVE_ENV") === "prod" ? "prod" : "test";
+export const BASE = ENV === "prod" ? "https://api.lyra.finance" : "https://api-demo.lyra.finance";
+export const DOMAIN_SEPARATOR = (ENV === "prod"
+  ? "0xd96e5f90797da7ec8dc4e276260c7f3f87fedf68775fbe1ef116e996fc60441b"
+  : "0x9bcf4dc06df5d8bf23af818d5716491b995020f377d3b7b64c29ed14e3dd1105") as Hex;
 export const ACTION_TYPEHASH = "0x4d7a9f27c403ff9c0f19bce61d76d82f9aa29f8d6d4b0c5474607d9770d1af17" as Hex;
-export const TRADE_MODULE = "0x87F2863866D85E3192a35A73b388BD625D83f2be";
+export const TRADE_MODULE = ENV === "prod"
+  ? "0xB8D20c2B7a1Ad2EE33Bc50eF10876eD3035b5e7b"
+  : "0x87F2863866D85E3192a35A73b388BD625D83f2be";
 
 export const CORS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-console-key",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 export const json = (b: unknown, status = 200) =>
@@ -23,10 +32,17 @@ export const json = (b: unknown, status = 200) =>
 export const sb = () =>
   createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-/* ---- keystore: AES-GCM, key derived from the service-role secret ------ */
+/* ---- keystore: AES-GCM. On testnet the key derives from the service-role
+ * secret (pilot-grade). On MAINNET a dedicated KEYSTORE_SECRET function
+ * secret - set by the operator, never stored in the database - is REQUIRED,
+ * so DB contents alone can never decrypt a real-money session key. ------- */
 async function aesKey(): Promise<CryptoKey> {
+  const dedicated = Deno.env.get("KEYSTORE_SECRET");
+  if (ENV === "prod" && !dedicated) {
+    throw new Error("mainnet requires the KEYSTORE_SECRET function secret to be set");
+  }
   const seed = new TextEncoder().encode(
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")! + ":overwrite-keystore-v1");
+    (dedicated ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!) + ":overwrite-keystore-v1");
   const digest = await crypto.subtle.digest("SHA-256", seed);
   return crypto.subtle.importKey("raw", digest, "AES-GCM", false, ["encrypt", "decrypt"]);
 }

@@ -42,11 +42,26 @@ Deno.serve(async (req) => {
     if (existing) {
       return json({ session_key_address: existing.session_key_address, status: existing.status });
     }
-    // cap enrollments per owner EOA: prevents spamming rows against someone
-    // else's address (their Console always resolves active-first regardless)
-    const { count } = await db.from("tenants")
-      .select("id", { count: "exact", head: true }).ilike("owner_eoa", owner);
-    if ((count ?? 0) >= 3) return json({ error: "too_many_enrollments_for_owner" }, 429);
+    // ALLOWLIST: when a fleet_config 'allowlist' row exists (private
+    // instances), only listed addresses may enroll - matched against the
+    // signing EOA or the Derive wallet, comma-separated, case-insensitive.
+    // Manage it with SQL:
+    //   update fleet_config set value = '0xEOA1,0xWALLET2' where key = 'allowlist';
+    const { data: al } = await db.from("fleet_config")
+      .select("value").eq("key", "allowlist").maybeSingle();
+    if (al?.value != null) {
+      const list = al.value.toLowerCase().split(",").map((x: string) => x.trim()).filter(Boolean);
+      if (!list.includes(owner.toLowerCase()) && !list.includes(wallet.toLowerCase())) {
+        return json({ error: "not_on_allowlist" }, 403);
+      }
+      const { count } = await db.from("tenants").select("id", { count: "exact", head: true });
+      if ((count ?? 0) >= Math.max(list.length, 1)) return json({ error: "instance_full" }, 429);
+    } else {
+      // public pilot behavior: cap enrollments per owner EOA (spam guard)
+      const { count } = await db.from("tenants")
+        .select("id", { count: "exact", head: true }).ilike("owner_eoa", owner);
+      if ((count ?? 0) >= 3) return json({ error: "too_many_enrollments_for_owner" }, 429);
+    }
     const { pk, address } = newSessionKey();
     const enc = await encryptPk(pk);
     const { error } = await db.from("tenants").insert({

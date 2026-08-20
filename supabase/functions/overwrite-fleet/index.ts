@@ -9,12 +9,18 @@
  */
 import {
   json, sb, decryptPk, authHeaders, rpc, actionNonce, encodeTrade, typedHash,
-  callDelta, annYield, quantize,
+  callDelta, annYield, quantize, ENV,
 } from "../_shared/derive.ts";
 import { privateKeyToAccount } from "npm:viem@2/accounts";
 
 const LABEL = "overwrite-hosted";
 const MAX_UTIL = 0.9;
+
+/** MAINNET SAFETY GATE: on prod, a tenant trades ONLY if its config sets
+ * live:true - the explicit switch the account owner flips after reviewing
+ * dry-run cycles. On testnet the fleet trades unless live:false. */
+const isLive = (cfg: any): boolean =>
+  ENV === "prod" ? cfg?.live === true : cfg?.live !== false;
 
 function timingSafeEq(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -50,7 +56,7 @@ Deno.serve(async (req) => {
       await db.from("tenants").update({ last_error: err }).eq("id", t.id);
     }
   }
-  return json({ ran: (tenants ?? []).length, results });
+  return json({ ran: (tenants ?? []).length, env: ENV, results });
 });
 
 async function cycle(db: any, t: any): Promise<string> {
@@ -80,14 +86,15 @@ async function cycle(db: any, t: any): Promise<string> {
     for (const tr of trades?.trades ?? []) {
       if (String(tr.label ?? "") !== LABEL) continue;
       const usd = Number(tr.trade_amount ?? tr.amount ?? 0) * Number(tr.trade_price ?? tr.price ?? 0);
+      const isOpt = String(tr.instrument_name ?? "").split("-").length >= 4;
       await db.from("ledger").insert({
         tenant_id: t.id,
-        kind: tr.direction === "sell" ? "premium_in" : "buyback_out",
+        kind: isOpt ? (tr.direction === "sell" ? "premium_in" : "buyback_out") : "sweep_fill",
         instrument: tr.instrument_name,
         usd: tr.direction === "sell" ? usd : -usd,
         detail: { trade_id: tr.trade_id ?? null },
       });
-      notes.push(`${tr.direction === "sell" ? "premium" : "buyback"} $${usd.toFixed(0)}`);
+      notes.push(`${isOpt ? (tr.direction === "sell" ? "premium" : "buyback") : "sweep fill"} $${Math.abs(usd).toFixed(0)}`);
     }
     await db.from("tenants").update({ last_trade_sync_ms: Date.now() }).eq("id", t.id);
   } catch { notes.push("trade-sync skipped"); }
@@ -99,6 +106,16 @@ async function cycle(db: any, t: any): Promise<string> {
     .gte("ts", new Date(Date.now() - 86400_000).toISOString());
   if ((ordersToday ?? 0) >= (cfg.max_orders_per_day ?? 40)) {
     return `order budget reached (${ordersToday}/24h) · covered ${shortCalls}/${baseAmt}`;
+  }
+
+  // premium sweep: route idle USDC (above a float you keep) into a spot buy
+  // of the sweep target - e.g. XAUT call premium accumulating into BTC.
+  // Runs before quoting so a filled call's premium converts within one cycle.
+  if (cfg.sweep?.buy) {
+    try {
+      const swept = await sweep(db, t, cfg, hdrs, subId, collaterals);
+      if (swept) notes.push(swept);
+    } catch (e) { notes.push(`sweep skipped: ${String(e).slice(0, 120)}`); }
   }
 
   // cancel our stale resting quotes, then re-quote at fresh mark
@@ -153,6 +170,12 @@ async function cycle(db: any, t: any): Promise<string> {
   const dp = (tickSz.split(".")[1] ?? "").length;
   const price = px.toFixed(dp);
 
+  // dormant mode: compute and log the exact order, place nothing. On
+  // mainnet this is the default until the owner sets config.live = true.
+  if (!isLive(cfg)) {
+    return `DRY (live:false) - would quote SELL ${amount} ${best.instrument_name} @ ${price} (${(yld * 100).toFixed(1)}% ann) ${notes.join(" · ")}`;
+  }
+
   const nonce = actionNonce();
   const expiry = Math.floor(Date.now() / 1000) + 3600;
   const account = privateKeyToAccount(pk);
@@ -187,4 +210,73 @@ async function cycle(db: any, t: any): Promise<string> {
     detail: { price, amount, delta_err: bestErr.toFixed(3), yld: yld.toFixed(3) },
   });
   return `quoted SELL ${amount} ${best.instrument_name} @ ${price} (${(yld * 100).toFixed(1)}% ann) ${notes.join(" · ")}`;
+}
+
+/**
+ * Premium router: buy `cfg.sweep.buy` (e.g. BTC) spot with idle USDC above
+ * the float. Marketable limit, IOC - fills immediately or not at all, never
+ * rests. Hard-capped per cycle by max_sweep_usd. Honors the live flag.
+ * config.sweep: { buy, keep_usdc_float?=100, min_sweep_usd?=25, max_sweep_usd?=250 }
+ */
+async function sweep(
+  db: any, t: any, cfg: any, hdrs: Record<string, string>,
+  subId: number, collaterals: any[],
+): Promise<string | null> {
+  const s = cfg.sweep;
+  const usdc = Number(collaterals.find((c: any) =>
+    String(c.asset_name ?? c.currency ?? "").toUpperCase() === "USDC")?.amount ?? 0);
+  const float = Number(s.keep_usdc_float ?? 100);
+  const minSweep = Number(s.min_sweep_usd ?? 25);
+  const avail = usdc - float;
+  if (avail < minSweep) return null;
+  const budget = Math.min(avail, Number(s.max_sweep_usd ?? 250));
+
+  const instName = `${String(s.buy).toUpperCase()}-USDC`;
+  const inst = await rpc("public/get_instrument", { instrument_name: instName }, {});
+  if (!inst?.base_asset_address) return `sweep: ${instName} not found`;
+  const tick = await rpc("public/get_ticker", { instrument_name: instName }, {});
+  const ask = Number(tick.best_ask_price) || Number(tick.mark_price) || 0;
+  if (!(ask > 0)) return `sweep: no ask on ${instName}`;
+
+  const amount = quantize(budget / ask, inst.amount_step ?? "0.0001");
+  if (Number(amount) <= 0) return "sweep: budget below amount step";
+  // marketable limit: a hair through the ask so IOC fills; floor-quantize
+  // then bump a tick if that dropped us below the ask
+  const tickSz = inst.tick_size ?? "0.01";
+  let px = Number(quantize(ask * 1.002, tickSz));
+  if (px < ask) px = px + Number(tickSz);
+  const dp = (tickSz.split(".")[1] ?? "").length;
+  const price = px.toFixed(dp);
+
+  if (!isLive(cfg)) {
+    return `DRY sweep - would BUY ${amount} ${instName} @ ≤${price} (~$${(Number(amount) * ask).toFixed(0)})`;
+  }
+
+  const nonce = actionNonce();
+  const expiry = Math.floor(Date.now() / 1000) + 3600;
+  const pk = await decryptPk(t.session_key_enc);
+  const account = privateKeyToAccount(pk);
+  const signature = await account.sign({
+    hash: typedHash({
+      subaccountId: subId, nonce,
+      moduleDataEncoded: encodeTrade({
+        assetAddress: inst.base_asset_address, subId: BigInt(inst.base_asset_sub_id ?? 0),
+        limitPrice: price, amount, maxFee: "1000", recipientId: subId, isBid: true,
+      }),
+      signatureExpirySec: expiry, owner: t.derive_wallet, signer: account.address,
+    }),
+  });
+  await rpc("private/order", {
+    instrument_name: instName, direction: "buy", order_type: "limit",
+    time_in_force: "ioc", amount, limit_price: price, max_fee: "1000",
+    subaccount_id: subId, nonce: "__nonce__", signature,
+    signature_expiry_sec: expiry, signer: account.address,
+    mmp: false, reduce_only: false, label: LABEL,
+  }, hdrs, nonce);
+  await db.from("ledger").insert({
+    tenant_id: t.id, kind: "sweep_buy", instrument: instName,
+    usd: -(Number(price) * Number(amount)),
+    detail: { price, amount, budget: budget.toFixed(2) },
+  });
+  return `swept ~$${(Number(amount) * ask).toFixed(0)} USDC → ${amount} ${String(s.buy).toUpperCase()}`;
 }
