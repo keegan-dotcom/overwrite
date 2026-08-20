@@ -80,7 +80,8 @@ function controlMessage(deriveWallet: string, patch: Record<string, unknown>, ts
   return `Overwrite mainnet control\nwallet: ${deriveWallet}\nset: ${JSON.stringify(patch)}\nts: ${ts}`;
 }
 async function signedControl(
-  deriveWallet: string, ownerEoa: string, patch: { live: boolean } | { kill: boolean },
+  deriveWallet: string, ownerEoa: string,
+  patch: { live: boolean } | { kill: boolean } | { plan: unknown },
 ): Promise<any> {
   const eth = (window as unknown as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
   if (!eth) throw new Error("no wallet to sign with");
@@ -143,3 +144,9 @@ export const hostedSetLive = (deriveWallet: string, ownerEoa: string, live: bool
   signedControl(deriveWallet, ownerEoa, { live });
 export const hostedPause = (deriveWallet: string, ownerEoa: string, kill: boolean) =>
   signedControl(deriveWallet, ownerEoa, { kill });
+
+/** Owner-only: deploy a structured plan to the hosted agent. The server always
+ * forces it to start dry-run (live:false); the owner reviews dry-run cycles in
+ * the Console/AgentBar, then flips it live. Requires a wallet signature. */
+export const hostedDeployPlan = (deriveWallet: string, ownerEoa: string, plan: unknown) =>
+  signedControl(deriveWallet, ownerEoa, { plan });

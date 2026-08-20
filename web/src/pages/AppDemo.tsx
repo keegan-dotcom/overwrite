@@ -3,12 +3,13 @@ import { asset, strategy, Quote, DEMO_PORTFOLIO, roundStrike, ASSETS, STRATEGIES
 import { connectWallet, hasWallet, shortAddr, WalletState } from "../lib/wallet";
 import { callPrice, strikeForYield, fmtUsd, fmtPct } from "../lib/options";
 import { parseIntent } from "../lib/intent";
+import { planAndValidate, describePlan } from "../lib/strategy/planner";
 import { RunItYourself } from "../components/app/RunItYourself";
 import { TestnetPanel } from "../components/app/TestnetPanel";
 import { HostedPanel } from "../components/app/HostedPanel";
 import { Console } from "../components/app/Console";
 import { TermsGate, termsAccepted } from "../components/app/TermsGate";
-import { hostedStatus, HostedStatus } from "../lib/hosted";
+import { hostedStatus, HostedStatus, hostedDeployPlan } from "../lib/hosted";
 import { resolveInstance, getNetwork, setNetwork } from "../lib/instance";
 import { AgentBar } from "../components/app/AgentBar";
 import { VENUES, VenueMode } from "../data/venues";
@@ -105,6 +106,9 @@ export function AppDemo() {
   const [thinking, setThinking] = useState(false);
   const [feed, setFeed] = useState<FeedEvent[]>([]);
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
+  // the last chat-built plan that PASSED the coherence validator (deployable)
+  const [pendingPlan, setPendingPlan] = useState<import("../lib/strategy/ir").StrategyPlan | null>(null);
+  const [deploying, setDeploying] = useState(false);
   const timers = useRef<number[]>([]);
   const ticketRef = useRef<HTMLDivElement>(null);
   const idRef = useRef(1);
@@ -316,17 +320,35 @@ export function AppDemo() {
         : ` One thing you should know: ${fmtPct(wantY, 0)}/yr isn't reachable on ${p.symbol} at today's volatility, even selling at-the-money. The ticket shows what your cap really pays.`;
     }
 
+    // coherence layer: build the structured plan (the IR the executor runs)
+    // and validate it. This is what refuses trades that don't achieve the goal
+    // and confirms the ones that do - always in code, never left to the model.
+    const { plan, result } = planAndValidate({
+      symbol: p.symbol, strategyId: p.strategyId, params: p.params, understood: p.understood,
+    });
+    setPendingPlan(result.ok ? plan : null);
+    const coherence = result.ok
+      ? `✓ coherent · ${describePlan(plan)}`
+      : `✕ won't deploy: ${result.errors.map((e) => e.message).join(" ")}`;
+    const warnLines = result.warnings.map((w) => `note: ${w.message}`);
+
     const lead = p.reply
       ? p.reply
       : `Here's what I built - ${s.name} (${s.proName}) on your ${qtyIn(portfolioRef.current, p.symbol).toLocaleString()} ${p.symbol}.`;
+    const tail = result.ok
+      ? (a.live ? "Approve the ticket and I take over the management loop." : "This asset lists on Derive soon - the ticket is a preview you can pre-approve.")
+      : "I won't put this on as-is - tell me the outcome you're after and I'll structure one that actually gets there.";
     setMessages((m) => [
       ...m,
       {
         role: "agent",
-        text: `${lead} ${q.headline}${conflict} ${a.live ? "Approve the ticket and I take over the management loop." : "This asset lists on Derive soon - the ticket is a preview you can pre-approve."}`,
-        bullets: remembered.length
-          ? [...p.understood, `Saved as your default: ${remembered.join(", ")} (say "clear my defaults" to reset)`]
-          : p.understood,
+        text: `${lead} ${q.headline}${conflict} ${tail}`,
+        bullets: [
+          ...p.understood,
+          coherence,
+          ...warnLines,
+          ...(remembered.length ? [`Saved as your default: ${remembered.join(", ")} (say "clear my defaults" to reset)`] : []),
+        ],
       },
     ]);
   }, [structure]);
@@ -378,6 +400,29 @@ export function AppDemo() {
       applyIntent({ symbol: p.symbol, strategyId: p.strategyId, params: p.params, understood: p.understood });
     })();
   }, [structure, applyIntent]);
+
+  // deploy the last coherent chat plan to the hosted mainnet agent (dry-run)
+  const deployPlan = useCallback(async () => {
+    if (!pendingPlan || !wallet) return;
+    let dw = hostedSt?.derive_wallet ?? "";
+    if (!dw) { try { dw = localStorage.getItem("overwrite_derive_wallet") ?? ""; } catch { /* noop */ } }
+    if (!/^0x[0-9a-fA-F]{40}$/.test(dw)) {
+      setMessages((m) => [...m, { role: "agent", text: "Set up your mainnet agent first (connect + enroll), then I can deploy this plan to it." }]);
+      return;
+    }
+    setDeploying(true);
+    try {
+      await hostedDeployPlan(dw, wallet.address, pendingPlan);
+      setMessages((m) => [...m, {
+        role: "agent",
+        text: `Deployed "${pendingPlan.label}" to your agent in DRY-RUN — it logs exactly what it would trade each 15-minute cycle, places nothing. Review it in the Console, then flip it live from the agent bar when you're happy.`,
+      }]);
+      setPendingPlan(null);
+      await refreshHosted();
+    } catch (e) {
+      setMessages((m) => [...m, { role: "agent", text: `Couldn't deploy: ${String((e as Error).message ?? e)}` }]);
+    } finally { setDeploying(false); }
+  }, [pendingPlan, wallet, hostedSt, refreshHosted]);
 
   const onDeploy = useCallback(() => {
     if (!ticket) return;
@@ -598,8 +643,21 @@ export function AppDemo() {
             </div>
 
             {/* right: chat */}
-            <div className="min-h-0 max-lg:h-[480px]">
-              <IntentChat messages={messages} onSend={onSend} thinking={thinking} defaultsNote={defaultsNote} />
+            <div className="flex min-h-0 flex-col gap-2 max-lg:h-[480px]">
+              <div className="min-h-0 flex-1">
+                <IntentChat messages={messages} onSend={onSend} thinking={thinking} defaultsNote={defaultsNote} />
+              </div>
+              {onMainnet && hostedSt?.enrolled && pendingPlan && (
+                <div className="flex items-center gap-2 border-2 border-mint bg-ink px-3 py-2">
+                  <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-mint">
+                    ready to deploy · {pendingPlan.label}
+                  </span>
+                  <button onClick={() => void deployPlan()} disabled={deploying}
+                    className="shrink-0 border-2 border-paper bg-accent px-3 py-1 font-mono text-[11px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-y-px disabled:opacity-60">
+                    {deploying ? "…" : "Deploy to agent · dry-run"}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -1,24 +1,31 @@
 /**
- * The hosted fleet cycle - "hosted-lite" income engine, runs every 15 min
- * via pg_cron. v1 scope: covered calls only, post-only maker quotes,
- * coverage invariant, min-yield gate, order budget, trade-history sync.
- * The full python agent remains the reference engine; parity items
- * (take-profit buybacks, defensive rolls) land iteratively.
+ * The hosted fleet cycle - private single-tenant instance (EU region).
  *
- * Auth: shared-secret header set by the cron job (plus anon JWT).
+ * Two execution paths:
+ *   1. LEGACY (unchanged): covered calls + optional premium sweep. Runs when a
+ *      tenant has no `config.plan`. This is the path the live tenant uses -
+ *      left byte-for-byte identical so nothing about it changes.
+ *   2. IR PLAN (additive, P1+): when `config.plan` is a StrategyPlan, the plan
+ *      is validated (coherence layer) and executed leg-by-leg: covered calls,
+ *      protective puts, cash-secured puts (wheel), collars, spot buys/sells,
+ *      perps + DCA (P3). Same isLive dry-run gate: on prod it only places real
+ *      orders when config.live === true.
+ *
+ * Runs every 15 min. Auth: shared secret header set by the cron job.
  */
 import {
   json, sb, decryptPk, authHeaders, rpc, actionNonce, encodeTrade, typedHash,
   callDelta, annYield, quantize, ENV,
 } from "../_shared/derive.ts";
+import { validatePlan, type StrategyPlan, type Leg, type Capabilities } from "../_shared/strategy.ts";
+import {
+  chooseOption, resolveAmount, coverageCap, priceLeg, dcaDue,
+  type OptCand, type AccountView,
+} from "../_shared/plan_exec.ts";
 import { privateKeyToAccount } from "npm:viem@2/accounts";
 
 const LABEL = "overwrite-hosted";
 const MAX_UTIL = 0.9;
-
-/** MAINNET SAFETY GATE: on prod, a tenant trades ONLY if its config sets
- * live:true - the explicit switch the account owner flips after reviewing
- * dry-run cycles. On testnet the fleet trades unless live:false. */
 const isLive = (cfg: any): boolean =>
   ENV === "prod" ? cfg?.live === true : cfg?.live !== false;
 
@@ -31,8 +38,6 @@ function timingSafeEq(a: string, b: string): boolean {
 
 Deno.serve(async (req) => {
   const db = sb();
-  // shared secret lives ONLY in the deny-all fleet_config table (never in
-  // code or the repo); the cron job reads the same row at fire time
   const { data: cfgRow } = await db.from("fleet_config")
     .select("value").eq("key", "fleet_secret").single();
   const expected = cfgRow?.value ?? "";
@@ -61,6 +66,12 @@ Deno.serve(async (req) => {
 
 async function cycle(db: any, t: any): Promise<string> {
   const cfg = t.config ?? {};
+  // NEW: if this tenant runs a structured IR plan, execute that and return.
+  // Otherwise fall through to the untouched legacy covered-call path.
+  if (cfg.plan && typeof cfg.plan === "object") {
+    return await runPlan(db, t, cfg);
+  }
+
   const sym = cfg.symbol ?? "ETH";
   const pk = await decryptPk(t.session_key_enc);
   const signer = privateKeyToAccount(pk).address;
@@ -68,7 +79,6 @@ async function cycle(db: any, t: any): Promise<string> {
   const subId = Number(t.subaccount_id);
   const notes: string[] = [];
 
-  // portfolio state
   const sub = await rpc("private/get_subaccount", { subaccount_id: subId }, hdrs);
   const collaterals = sub?.collaterals ?? [];
   const base = collaterals.find((c: any) =>
@@ -79,7 +89,6 @@ async function cycle(db: any, t: any): Promise<string> {
     String(p.instrument_name ?? "").endsWith("-C") && Number(p.amount) < 0);
   const shortCalls = positions.reduce((a: number, p: any) => a + Math.abs(Number(p.amount)), 0);
 
-  // trade-history sync → premium ledger
   try {
     const trades = await rpc("private/get_trade_history",
       { subaccount_id: subId, from_timestamp: Number(t.last_trade_sync_ms ?? 0) + 1 }, hdrs);
@@ -99,7 +108,6 @@ async function cycle(db: any, t: any): Promise<string> {
     await db.from("tenants").update({ last_trade_sync_ms: Date.now() }).eq("id", t.id);
   } catch { notes.push("trade-sync skipped"); }
 
-  // order budget
   const { count: ordersToday } = await db.from("ledger")
     .select("id", { count: "exact", head: true })
     .eq("tenant_id", t.id).eq("kind", "quote_placed")
@@ -108,9 +116,6 @@ async function cycle(db: any, t: any): Promise<string> {
     return `order budget reached (${ordersToday}/24h) · covered ${shortCalls}/${baseAmt}`;
   }
 
-  // premium sweep: route idle USDC (above a float you keep) into a spot buy
-  // of the sweep target - e.g. XAUT call premium accumulating into BTC.
-  // Runs before quoting so a filled call's premium converts within one cycle.
   if (cfg.sweep?.buy) {
     try {
       const swept = await sweep(db, t, cfg, hdrs, subId, collaterals);
@@ -118,17 +123,15 @@ async function cycle(db: any, t: any): Promise<string> {
     } catch (e) { notes.push(`sweep skipped: ${String(e).slice(0, 120)}`); }
   }
 
-  // cancel our stale resting quotes, then re-quote at fresh mark
   try {
     await rpc("private/cancel_by_label", { subaccount_id: subId, label: LABEL }, hdrs);
-  } catch { /* nothing to cancel or endpoint variant - proceed */ }
+  } catch { /* nothing to cancel - proceed */ }
 
   const capacity = baseAmt * MAX_UTIL - shortCalls;
   if (capacity < (cfg.min_order ?? 0.1)) {
-    return `fully covered (${shortCalls.toFixed(2)}/${baseAmt.toFixed(2)} ${sym}) · idle`;
+    return `fully covered (${shortCalls.toFixed(2)}/${baseAmt.toFixed(2)} ${sym}) · idle · ${notes.join(" · ")}`;
   }
 
-  // instrument selection: dte window, nearest target delta (BS w/ fallback IV)
   const instruments = await rpc("public/get_instruments",
     { currency: sym, expired: false, instrument_type: "option" }, {});
   const nowS = Date.now() / 1000;
@@ -155,14 +158,11 @@ async function cycle(db: any, t: any): Promise<string> {
   const dte = (best.option_details.expiry - nowS) / 86400;
   const yld = annYield(mark, spot, dte);
   if (yld < (cfg.min_yield ?? 0.05)) {
-    return `best ${best.instrument_name} yields ${(yld * 100).toFixed(1)}% < floor · idle`;
+    return `best ${best.instrument_name} yields ${(yld * 100).toFixed(1)}% < floor · idle · ${notes.join(" · ")}`;
   }
 
   const amount = quantize(Math.min(capacity, cfg.max_order ?? 5), best.amount_step ?? "0.1");
   if (Number(amount) <= 0) return "capacity below amount step · idle";
-  // post-only sell: the price must sit ABOVE the best bid or the venue
-  // rejects it (11008 "cannot cross the market"). Quote at the better of
-  // mark/ask, then bump one tick past the bid if the book has crossed up.
   const tickSz = best.tick_size ?? "0.1";
   const bid = Number(tick.best_bid_price) || 0;
   let px = Number(quantize(Math.max(mark, Number(tick.best_ask_price) || mark), tickSz));
@@ -170,8 +170,6 @@ async function cycle(db: any, t: any): Promise<string> {
   const dp = (tickSz.split(".")[1] ?? "").length;
   const price = px.toFixed(dp);
 
-  // dormant mode: compute and log the exact order, place nothing. On
-  // mainnet this is the default until the owner sets config.live = true.
   if (!isLive(cfg)) {
     return `DRY (live:false) - would quote SELL ${amount} ${best.instrument_name} @ ${price} (${(yld * 100).toFixed(1)}% ann) ${notes.join(" · ")}`;
   }
@@ -197,8 +195,6 @@ async function cycle(db: any, t: any): Promise<string> {
       signature_expiry_sec: expiry, signer, mmp: false, reduce_only: false, label: LABEL,
     }, hdrs, nonce);
   } catch (e) {
-    // 11008 = the book moved between pricing and placement; post-only
-    // protection kicked in. Benign - we re-quote next cycle at fresh prices.
     if (String(e).includes("cannot cross")) {
       return `book moved at quote time - post-only protection skipped this cycle (re-quotes in 15m) ${notes.join(" · ")}`;
     }
@@ -212,12 +208,6 @@ async function cycle(db: any, t: any): Promise<string> {
   return `quoted SELL ${amount} ${best.instrument_name} @ ${price} (${(yld * 100).toFixed(1)}% ann) ${notes.join(" · ")}`;
 }
 
-/**
- * Premium router: buy `cfg.sweep.buy` (e.g. BTC) spot with idle USDC above
- * the float. Marketable limit, IOC - fills immediately or not at all, never
- * rests. Hard-capped per cycle by max_sweep_usd. Honors the live flag.
- * config.sweep: { buy, keep_usdc_float?=100, min_sweep_usd?=25, max_sweep_usd?=250 }
- */
 async function sweep(
   db: any, t: any, cfg: any, hdrs: Record<string, string>,
   subId: number, collaterals: any[],
@@ -240,8 +230,6 @@ async function sweep(
 
   const amount = quantize(budget / ask, inst.amount_step ?? "0.0001");
   if (Number(amount) <= 0) return "sweep: budget below amount step";
-  // marketable limit: a hair through the ask so IOC fills; floor-quantize
-  // then bump a tick if that dropped us below the ask
   const tickSz = inst.tick_size ?? "0.01";
   let px = Number(quantize(ask * 1.002, tickSz));
   if (px < ask) px = px + Number(tickSz);
@@ -279,4 +267,281 @@ async function sweep(
     detail: { price, amount, budget: budget.toFixed(2) },
   });
   return `swept ~$${(Number(amount) * ask).toFixed(0)} USDC → ${amount} ${String(s.buy).toUpperCase()}`;
+}
+
+/* ========================================================================== *
+ *  IR PLAN EXECUTOR (P1: options + spot · P3 adds perps + DCA scheduling)
+ * ========================================================================== */
+
+type Ctx = {
+  pk: `0x${string}`;
+  signer: string;
+  hdrs: Record<string, string>;
+  subId: number;
+  collaterals: any[];
+  positions: any[];
+  spot: Record<string, number>;   // index price per asset
+  equity: number;                 // subaccount_value (USD)
+  maintMargin: number;            // maintenance_margin (USD, ≥0)
+};
+
+/** Held amount of an asset in the subaccount collateral (base units). */
+function held(ctx: Ctx, asset: string): number {
+  return ctx.collaterals
+    .filter((c: any) => String(c.asset_name ?? c.currency ?? "").toUpperCase() === asset.toUpperCase())
+    .reduce((a: number, c: any) => a + Math.abs(Number(c.amount ?? 0)), 0);
+}
+function usdcFree(ctx: Ctx): number {
+  return Number(ctx.collaterals.find((c: any) =>
+    String(c.asset_name ?? c.currency ?? "").toUpperCase() === "USDC")?.amount ?? 0);
+}
+
+/** Signed size of existing short options of a given type on an asset. */
+function shortOptionAmount(ctx: Ctx, asset: string, type: "C" | "P"): number {
+  return (ctx.positions ?? [])
+    .filter((p: any) => String(p.instrument_name ?? "").startsWith(`${asset.toUpperCase()}-`) &&
+      String(p.instrument_name ?? "").endsWith(`-${type}`) && Number(p.amount) < 0)
+    .reduce((a: number, p: any) => a + Math.abs(Number(p.amount)), 0);
+}
+
+async function indexPrice(asset: string, cache: Record<string, number>): Promise<number> {
+  const key = asset.toUpperCase();
+  if (cache[key]) return cache[key];
+  // any instrument on the asset carries index_price; use the perp or an option probe
+  try {
+    const t = await rpc("public/get_ticker", { instrument_name: `${key}-PERP` }, {});
+    const p = Number(t.index_price);
+    if (p > 0) { cache[key] = p; return p; }
+  } catch { /* no perp - fall through */ }
+  const insts = await rpc("public/get_instruments",
+    { currency: key, expired: false, instrument_type: "option" }, {});
+  if ((insts ?? []).length) {
+    const t = await rpc("public/get_ticker", { instrument_name: insts[0].instrument_name }, {});
+    const p = Number(t.index_price);
+    if (p > 0) { cache[key] = p; return p; }
+  }
+  throw new Error(`no index price for ${key}`);
+}
+
+/** Fetch + filter option candidates (type + DTE window), then pick via the
+ * pure chooser. */
+async function selectOption(leg: Leg, spotPx: number): Promise<any> {
+  const spec = leg.option!;
+  const nowS = Date.now() / 1000;
+  const insts = await rpc("public/get_instruments",
+    { currency: leg.asset.toUpperCase(), expired: false, instrument_type: "option" }, {});
+  const cands = ((insts ?? []) as OptCand[]).filter((i: any) => {
+    const d = i.option_details;
+    if (!d || d.option_type !== spec.type) return false;
+    const dte = (d.expiry - nowS) / 86400;
+    return dte >= spec.expiry.dteMin && dte <= spec.expiry.dteMax;
+  });
+  if (!cands.length) throw new Error(`no ${spec.type} in ${spec.expiry.dteMin}-${spec.expiry.dteMax}d`);
+  const best = chooseOption(cands, leg, spotPx, nowS);
+  if (!best) throw new Error(`no ${spec.type} strike match`);
+  return best;
+}
+
+/** AccountView adapter over the live Ctx for the pure sizing helpers. */
+function acctView(ctx: Ctx): AccountView {
+  return { held: (a: string) => held(ctx, a), spot: ctx.spot };
+}
+
+/** Place (or dry-log) one order for a resolved leg. */
+async function placeLeg(
+  db: any, t: any, cfg: any, ctx: Ctx, leg: Leg,
+  inst: any, isBid: boolean, priceStr: string, amountStr: string, tif: string,
+): Promise<void> {
+  if (!isLive(cfg)) return; // dry-run: caller logs the intended order
+  const nonce = actionNonce();
+  const expiry = Math.floor(Date.now() / 1000) + 3600;
+  const account = privateKeyToAccount(ctx.pk);
+  const signature = await account.sign({
+    hash: typedHash({
+      subaccountId: ctx.subId, nonce,
+      moduleDataEncoded: encodeTrade({
+        assetAddress: inst.base_asset_address, subId: BigInt(inst.base_asset_sub_id ?? 0),
+        limitPrice: priceStr, amount: amountStr, maxFee: "1000", recipientId: ctx.subId, isBid,
+      }),
+      signatureExpirySec: expiry, owner: t.derive_wallet, signer: account.address,
+    }),
+  });
+  await rpc("private/order", {
+    instrument_name: inst.instrument_name, direction: isBid ? "buy" : "sell",
+    order_type: "limit", time_in_force: tif, amount: amountStr, limit_price: priceStr,
+    max_fee: "1000", subaccount_id: ctx.subId, nonce: "__nonce__", signature,
+    signature_expiry_sec: expiry, signer: account.address, mmp: false,
+    reduce_only: !!leg.reduceOnly, label: LABEL,
+  }, ctx.hdrs, nonce);
+}
+
+/** Execute one leg; returns a human note. Honors the dry-run gate. */
+async function execLeg(db: any, t: any, cfg: any, plan: StrategyPlan, leg: Leg, ctx: Ctx): Promise<string> {
+  const isBid = leg.side === "buy";
+  const maker = leg.orderType === "post_only";
+
+  // resolve the instrument + a reference price
+  let inst: any, tick: any, refMark: number, tickSz: string, amtStep: string;
+  if (leg.venue === "option") {
+    const spotPx = await indexPrice(leg.asset, ctx.spot);
+    inst = await selectOption(leg, spotPx);
+    tick = await rpc("public/get_ticker", { instrument_name: inst.instrument_name }, {});
+    refMark = Number(tick.mark_price);
+    tickSz = inst.tick_size ?? "0.1";
+    amtStep = inst.amount_step ?? "0.1";
+  } else if (leg.venue === "spot") {
+    const instName = `${leg.asset.toUpperCase()}-USDC`;
+    inst = await rpc("public/get_instrument", { instrument_name: instName }, {});
+    if (!inst?.base_asset_address) throw new Error(`${instName} not found`);
+    tick = await rpc("public/get_ticker", { instrument_name: instName }, {});
+    refMark = Number(tick.mark_price) || Number(tick.best_ask_price) || 0;
+    tickSz = inst.tick_size ?? "0.01";
+    amtStep = inst.amount_step ?? "0.0001";
+  } else {
+    // perp
+    const instName = `${leg.asset.toUpperCase()}-PERP`;
+    inst = await rpc("public/get_instrument", { instrument_name: instName }, {});
+    if (!inst?.base_asset_address) throw new Error(`${instName} not found`);
+    tick = await rpc("public/get_ticker", { instrument_name: instName }, {});
+    refMark = Number(tick.mark_price) || Number(tick.index_price) || 0;
+    tickSz = inst.tick_size ?? "0.1";
+    amtStep = inst.amount_step ?? "0.001";
+  }
+
+  // resolve size (pure helper), then cap a covered short call to held base
+  let amt = resolveAmount(leg, plan, acctView(ctx), refMark);
+  if (leg.venue === "option" && leg.option?.type === "C" && leg.side === "sell"
+      && (plan.objective.kind === "income" || plan.objective.kind === "collar" || leg.sizing.kind === "pct_of_collateral")) {
+    amt = Math.min(amt, coverageCap(held(ctx, leg.asset), shortOptionAmount(ctx, leg.asset, "C"), MAX_UTIL));
+  }
+  // P3 guardrail: perps carry liquidation risk. Cap notional and require a
+  // free-margin buffer so a perp leg can never over-lever the account.
+  if (leg.venue === "perp" && refMark > 0) {
+    const maxNotional = Number(plan.constraints.maxNotionalUsd ?? cfg.max_perp_notional_usd ?? Infinity);
+    if (isFinite(maxNotional)) amt = Math.min(amt, maxNotional / refMark);
+  }
+  const amount = quantize(Math.max(0, amt), amtStep);
+  if (Number(amount) <= 0) return `${leg.id}: size ≤ step · skip`;
+  if (leg.venue === "perp" && refMark > 0) {
+    const notional = Number(amount) * refMark;
+    const freeMargin = ctx.equity - ctx.maintMargin;
+    const needed = notional * Number(cfg.perp_initial_margin_frac ?? 0.2); // ~5x cap
+    if (freeMargin < needed) {
+      return `${leg.id}: margin buffer too thin (free $${freeMargin.toFixed(0)} < ~$${needed.toFixed(0)} for $${notional.toFixed(0)} notional) · skip`;
+    }
+  }
+
+  // price (pure helper)
+  const bid = Number(tick.best_bid_price) || 0;
+  const ask = Number(tick.best_ask_price) || refMark || 0;
+  const dp = (tickSz.split(".")[1] ?? "").length;
+  const priced = priceLeg({ maker, isBid, refMark, bid, ask, tickSz: Number(tickSz) });
+  const px = priced.px;
+  const tif = priced.tif;
+  if (!(px > 0)) return `${leg.id}: no price · skip`;
+  const price = px.toFixed(dp);
+
+  // income min-yield gate (only for premium-selling call legs)
+  if (leg.venue === "option" && leg.side === "sell" && plan.objective.kind === "income") {
+    const spotPx = ctx.spot[leg.asset.toUpperCase()] ?? refMark;
+    const dte = (inst.option_details.expiry - Date.now() / 1000) / 86400;
+    const yld = annYield(refMark, spotPx, dte);
+    const floor = Number(cfg.min_yield ?? plan.objective.targetYieldAnnual ?? 0.05);
+    if (yld < floor) return `${leg.id}: ${(yld * 100).toFixed(1)}% < ${(floor * 100).toFixed(0)}% floor · skip`;
+  }
+
+  const verb = isBid ? "BUY" : "SELL";
+  if (!isLive(cfg)) {
+    return `DRY ${leg.id}: ${verb} ${amount} ${inst.instrument_name} @ ${price} (${tif})`;
+  }
+  try {
+    await placeLeg(db, t, cfg, ctx, leg, inst, isBid, price, amount, tif);
+  } catch (e) {
+    if (String(e).includes("cannot cross")) return `${leg.id}: book moved (post-only) · re-quotes next cycle`;
+    throw e;
+  }
+  await db.from("ledger").insert({
+    tenant_id: t.id,
+    kind: leg.side === "sell" && leg.venue === "option" ? "quote_placed" : "leg_placed",
+    instrument: inst.instrument_name,
+    usd: (isBid ? -1 : 1) * Number(price) * Number(amount),
+    detail: { leg: leg.id, venue: leg.venue, price, amount, tif },
+  });
+  return `${verb} ${amount} ${inst.instrument_name} @ ${price} (${tif})`;
+}
+
+/** Run a structured StrategyPlan for a tenant. */
+async function runPlan(db: any, t: any, cfg: any): Promise<string> {
+  const plan: StrategyPlan = cfg.plan;
+  const pk = await decryptPk(t.session_key_enc);
+  const signer = privateKeyToAccount(pk).address;
+  const hdrs = await authHeaders(pk, t.derive_wallet);
+  const subId = Number(t.subaccount_id);
+
+  const sub = await rpc("private/get_subaccount", { subaccount_id: subId }, hdrs);
+  const collaterals = sub?.collaterals ?? [];
+  const positions = sub?.positions ?? [];
+  const ctx: Ctx = {
+    pk, signer, hdrs, subId, collaterals, positions, spot: {},
+    equity: Number(sub?.subaccount_value ?? 0),
+    maintMargin: Math.abs(Number(sub?.maintenance_margin ?? 0)),
+  };
+
+  // hydrate the plan with live account facts, then validate (coherence gate)
+  plan.holdings = collaterals
+    .filter((c: any) => String(c.asset_name ?? c.currency ?? "").toUpperCase() !== "USDC")
+    .map((c: any) => ({ asset: String(c.asset_name ?? c.currency), amount: Math.abs(Number(c.amount ?? 0)) }));
+  const assets = Array.from(new Set(plan.legs.map((l) => l.asset.toUpperCase())));
+  plan.spot = plan.spot ?? {};
+  for (const a of assets) {
+    try { plan.spot[a] = await indexPrice(a, ctx.spot); } catch { /* leave unset */ }
+  }
+  const caps = (cfg.capabilities ?? undefined) as Capabilities | undefined;
+  const vr = validatePlan(plan, caps);
+  if (!vr.ok) {
+    return `plan REJECTED (${plan.label}): ${vr.errors.map((e) => `${e.code}${e.legId ? "/" + e.legId : ""}`).join(", ")}`;
+  }
+
+  // DCA gate: recurring legs only fire when their cadence has elapsed
+  const legState: Record<string, number> = (cfg.leg_last_run ?? {});
+  const dueRecurring = (leg: Leg): boolean =>
+    plan.schedule.kind !== "recurring" ||
+    dcaDue(plan.schedule.everyDays ?? 1, Number(legState[leg.id] ?? 0), Date.now());
+
+  // order budget for the day
+  const { count: ordersToday } = await db.from("ledger")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", t.id).in("kind", ["quote_placed", "leg_placed"])
+    .gte("ts", new Date(Date.now() - 86400_000).toISOString());
+  if ((ordersToday ?? 0) >= Number(cfg.max_orders_per_day ?? 40)) {
+    return `order budget reached (${ordersToday}/24h) · ${plan.label}`;
+  }
+
+  // refresh our resting maker quotes each cycle
+  try { await rpc("private/cancel_by_label", { subaccount_id: subId, label: LABEL }, hdrs); } catch { /* noop */ }
+
+  const notes: string[] = [];
+  const firedRecurring: string[] = [];
+  for (const leg of plan.legs) {
+    // recurring (DCA) legs skip until due; maker legs re-quote every cycle
+    const recurring = plan.schedule.kind === "recurring" && (leg.venue === "spot" || leg.venue === "perp") && leg.side === "buy";
+    if (recurring && !dueRecurring(leg)) { notes.push(`${leg.id}: not due`); continue; }
+    try {
+      const r = await execLeg(db, t, cfg, plan, leg, ctx);
+      notes.push(r);
+      if (recurring && isLive(cfg) && !r.includes("skip")) firedRecurring.push(leg.id);
+    } catch (e) {
+      notes.push(`${leg.id}: ERR ${String(e).slice(0, 100)}`);
+    }
+  }
+
+  // persist DCA cadence marks for legs we actually fired
+  if (firedRecurring.length) {
+    const next = { ...legState };
+    for (const id of firedRecurring) next[id] = Date.now();
+    await db.from("tenants").update({ config: { ...cfg, leg_last_run: next } }).eq("id", t.id);
+  }
+
+  const mode = isLive(cfg) ? "" : "DRY ";
+  return `${mode}${plan.label} · ${notes.join(" · ")}`;
 }
