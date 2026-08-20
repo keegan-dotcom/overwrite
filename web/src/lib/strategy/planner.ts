@@ -29,8 +29,12 @@ function dteWindow(dte?: number): { dteMin: number; dteMax: number } {
   return { dteMin: Math.max(3, dte - 15), dteMax: dte + 15 };
 }
 
+/** Account context the planner sizes against (real balances on mainnet, demo
+ * portfolio otherwise). */
+export type AccountCtx = { holdings?: { asset: string; amount: number }[]; freeUsdc?: number };
+
 /** Build a StrategyPlan from a parsed intent. Pure — no I/O. */
-export function planFromIntent(parsed: ParsedIntent): StrategyPlan {
+export function planFromIntent(parsed: ParsedIntent, account?: AccountCtx): StrategyPlan {
   const asset = parsed.symbol.toUpperCase();
   const spot = spotOf(asset);
   const p = parsed.params;
@@ -61,15 +65,13 @@ export function planFromIntent(parsed: ParsedIntent): StrategyPlan {
       break;
     }
     case "wheel": {
-      // cash-secured put — get paid to buy the dip. Bounded loss (strike), so
-      // give the validator an explicit maxLoss so it clears the defined-risk gate.
+      // cash-secured put — get paid to buy the dip. Sized to free USDC (never
+      // more than cash can secure), so it's genuinely defined-risk.
       objectiveKind = "accumulate";
       objective.kind = "accumulate";
-      const strike = p.capTarget && p.capTarget < spot ? p.capTarget : spot * 0.9;
-      constraints.maxLossUsd = Math.round(strike);
       legs.push({
         id: "put", venue: "option", asset, side: "sell", orderType: "post_only",
-        sizing: { kind: "contracts", amount: 1 },
+        sizing: { kind: "cash_secured", pct: 100 },
         option: {
           type: "P", expiry: dte,
           strike: p.capTarget && p.capTarget < spot
@@ -133,20 +135,27 @@ export function planFromIntent(parsed: ParsedIntent): StrategyPlan {
   if (p.stopLossPct != null) objective.stopLossPct = p.stopLossPct;
   void objectiveKind;
 
+  // account context: real balances on mainnet, demo portfolio otherwise, so the
+  // validator sizes/feasibility-checks against what the account actually holds.
+  // The executor re-hydrates real holdings + USDC at run time regardless.
+  const holdings = account?.holdings
+    ?? DEMO_PORTFOLIO.map((h) => ({ asset: h.symbol, amount: h.qty }));
+
   return {
     asset, label, objective, legs,
     schedule: { kind: "once" },
     constraints,
     spot: { [asset]: spot },
-    // preview holdings so coverage checks (covered call / collar / shield) are
-    // realistic client-side. The executor re-hydrates real holdings at run time.
-    holdings: DEMO_PORTFOLIO.map((h) => ({ asset: h.symbol, amount: h.qty })),
+    holdings,
+    ...(account?.freeUsdc != null ? { freeUsdc: account.freeUsdc } : {}),
   };
 }
 
 /** Plan + validate in one call — what the chat renders. */
-export function planAndValidate(parsed: ParsedIntent): { plan: StrategyPlan; result: ValidationResult } {
-  const plan = planFromIntent(parsed);
+export function planAndValidate(
+  parsed: ParsedIntent, account?: AccountCtx,
+): { plan: StrategyPlan; result: ValidationResult } {
+  const plan = planFromIntent(parsed, account);
   const result = validatePlan(plan, DEMO_CAPS);
   return { plan, result };
 }

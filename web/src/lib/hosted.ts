@@ -35,36 +35,57 @@ export function strategyLabel(config?: { symbol?: string; sweep?: { buy?: string
 // the server (overwrite-status) recovers the signer and only returns data if
 // it's the account owner. The signature is cached and reused within the
 // server's freshness window, so 20-30s polling never re-prompts.
-let _readAuth: { owner: string; ts: number; sig: string } | null = null;
+type ReadAuth = { owner: string; ts: number; sig: string };
+type ReadPack = { owner: string; read_ts: number; read_sig: string };
+const READ_LS = "overwrite_read_auth";
+// server freshness window is 120m; reuse a signature well inside that
+const READ_REUSE_MS = 110 * 60_000;
+
+function loadReadAuth(): ReadAuth | null {
+  try {
+    const j = JSON.parse(localStorage.getItem(READ_LS) ?? "null");
+    if (j && typeof j.owner === "string" && typeof j.ts === "number" && typeof j.sig === "string") return j;
+  } catch { /* noop */ }
+  return null;
+}
+let _readAuth: ReadAuth | null = loadReadAuth();
 let _readDeclinedUntil = 0;
+// CRITICAL: only ever have ONE signature prompt in flight. Concurrent pollers
+// (AppDemo 20s + Console 30s + panel) must share it, or the user gets a queue
+// of duplicate Rabby/MetaMask prompts.
+let _readInflight: Promise<ReadPack | null> | null = null;
 
 // MUST match the server (supabase overwrite-status) exactly
 function readMessage(owner: string, ts: number): string {
   return `Overwrite mainnet read\nowner: ${owner}\nts: ${ts}`;
 }
+const pack = (a: ReadAuth): ReadPack => ({ owner: a.owner, read_ts: a.ts, read_sig: a.sig });
 
-async function ensureReadAuth(
-  ownerEoa?: string,
-): Promise<{ owner: string; read_ts: number; read_sig: string } | null> {
-  const fresh = _readAuth && Date.now() - _readAuth.ts < 25 * 60_000; // server allows 30m
+async function ensureReadAuth(ownerEoa?: string): Promise<ReadPack | null> {
+  const fresh = _readAuth && Date.now() - _readAuth.ts < READ_REUSE_MS;
   if (fresh && (!ownerEoa || _readAuth!.owner.toLowerCase() === ownerEoa.toLowerCase())) {
-    return { owner: _readAuth!.owner, read_ts: _readAuth!.ts, read_sig: _readAuth!.sig };
+    return pack(_readAuth!);
   }
-  if (!ownerEoa) {
-    return _readAuth ? { owner: _readAuth.owner, read_ts: _readAuth.ts, read_sig: _readAuth.sig } : null;
-  }
-  if (Date.now() < _readDeclinedUntil) return null; // user just rejected - don't nag
+  if (!ownerEoa) return _readAuth ? pack(_readAuth) : null;
+  if (_readInflight) return _readInflight;            // <-- de-dup concurrent prompts
+  if (Date.now() < _readDeclinedUntil) return null;   // user just rejected - don't nag
   const eth = (window as unknown as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
   if (!eth) return null;
-  try {
-    const ts = Date.now();
-    const sig = (await eth.request({ method: "personal_sign", params: [readMessage(ownerEoa, ts), ownerEoa] })) as string;
-    _readAuth = { owner: ownerEoa, ts, sig };
-    return { owner: ownerEoa, read_ts: ts, read_sig: sig };
-  } catch {
-    _readDeclinedUntil = Date.now() + 60_000; // back off a minute on rejection
-    return null;
-  }
+  _readInflight = (async () => {
+    try {
+      const ts = Date.now();
+      const sig = (await eth.request({ method: "personal_sign", params: [readMessage(ownerEoa, ts), ownerEoa] })) as string;
+      _readAuth = { owner: ownerEoa, ts, sig };
+      try { localStorage.setItem(READ_LS, JSON.stringify(_readAuth)); } catch { /* noop */ }
+      return pack(_readAuth);
+    } catch {
+      _readDeclinedUntil = Date.now() + 60_000; // back off a minute on rejection
+      return null;
+    } finally {
+      _readInflight = null;
+    }
+  })();
+  return _readInflight;
 }
 
 /** Prompt once for read access on mainnet (public no-op on demo). Returns

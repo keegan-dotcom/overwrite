@@ -66,6 +66,9 @@ export function resolveAmount(leg: Leg, plan: StrategyPlan, acct: AccountView, r
     const underlying = acct.spot[leg.asset.toUpperCase()] ?? refPx;
     return underlying > 0 ? s.usd / underlying : 0;
   }
+  // cash_secured needs the option strike, which only the executor has post
+  // instrument-selection - it computes the size there. 0 here is the safe default.
+  if (s.kind === "cash_secured") return 0;
   const ref = plan.legs.find((l) => l.id === s.legId);
   return ref ? resolveAmount(ref, plan, acct, refPx) : 0;
 }

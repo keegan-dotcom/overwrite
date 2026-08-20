@@ -12,7 +12,7 @@
 import { CORS, json, sb, decryptPk, authHeaders, rpc, ENV } from "../_shared/derive.ts";
 import { recoverMessageAddress } from "npm:viem@2";
 
-const READ_WINDOW_MS = 30 * 60_000; // signature freshness
+const READ_WINDOW_MS = 120 * 60_000; // signature freshness (2h — one sign per session)
 
 // canonical read-auth message - MUST match the client (lib/hosted.ts) exactly
 const readMessage = (owner: string, ts: number) =>

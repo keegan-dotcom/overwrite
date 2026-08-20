@@ -19,6 +19,7 @@ export type Sizing =
   | { kind: "contracts"; amount: number }
   | { kind: "notional_usd"; usd: number }
   | { kind: "pct_of_collateral"; pct: number } // e.g. cover 90% of held ETH
+  | { kind: "cash_secured"; pct?: number }     // short puts sized to (pct% of) free USDC
   | { kind: "match_leg"; legId: string };      // size to another leg (spreads/collars)
 
 export type StrikeRule =
@@ -79,6 +80,8 @@ export interface StrategyPlan {
   holdings?: { asset: string; amount: number }[];
   /** Spot reference per asset, when known (for floor/moneyness sanity). */
   spot?: Record<string, number>;
+  /** Available USDC collateral, for cash-secured sizing + feasibility checks. */
+  freeUsdc?: number;
 }
 
 /** What Derive actually lists per asset — the executor supplies the live map;

@@ -408,11 +408,29 @@ async function execLeg(db: any, t: any, cfg: any, plan: StrategyPlan, leg: Leg, 
     amtStep = inst.amount_step ?? "0.001";
   }
 
-  // resolve size (pure helper), then cap a covered short call to held base
-  let amt = resolveAmount(leg, plan, acctView(ctx), refMark);
+  // resolve size. cash_secured puts size to free USDC / strike; everything else
+  // via the pure helper.
+  const putStrike = leg.venue === "option" ? Number(inst.option_details?.strike ?? 0) : 0;
+  let amt: number;
+  if (leg.sizing.kind === "cash_secured" && putStrike > 0) {
+    const pct = (leg.sizing.pct ?? 100) / 100;
+    amt = (usdcFree(ctx) * pct) / putStrike;
+  } else {
+    amt = resolveAmount(leg, plan, acctView(ctx), refMark);
+  }
+  // cap a covered short call to held base
   if (leg.venue === "option" && leg.option?.type === "C" && leg.side === "sell"
       && (plan.objective.kind === "income" || plan.objective.kind === "collar" || leg.sizing.kind === "pct_of_collateral")) {
     amt = Math.min(amt, coverageCap(held(ctx, leg.asset), shortOptionAmount(ctx, leg.asset, "C"), MAX_UTIL));
+  }
+  // HARD SAFETY: a short put can NEVER exceed what free USDC can secure - so a
+  // naive "1 contract" can't over-leverage a small account. Cash-secured, always.
+  if (leg.venue === "option" && leg.option?.type === "P" && leg.side === "sell" && putStrike > 0) {
+    const securable = usdcFree(ctx) / putStrike;
+    if (amt > securable) amt = securable;
+    if (securable < Number(amtStep)) {
+      return `${leg.id}: insufficient USDC to cash-secure a put (need ~$${putStrike.toFixed(0)}/contract, have $${usdcFree(ctx).toFixed(0)}) · skip`;
+    }
   }
   // P3 guardrail: perps carry liquidation risk. Cap notional and require a
   // free-margin buffer so a perp leg can never over-lever the account.
@@ -491,6 +509,7 @@ async function runPlan(db: any, t: any, cfg: any): Promise<string> {
   plan.holdings = collaterals
     .filter((c: any) => String(c.asset_name ?? c.currency ?? "").toUpperCase() !== "USDC")
     .map((c: any) => ({ asset: String(c.asset_name ?? c.currency), amount: Math.abs(Number(c.amount ?? 0)) }));
+  plan.freeUsdc = usdcFree(ctx);
   const assets = Array.from(new Set(plan.legs.map((l) => l.asset.toUpperCase())));
   plan.spot = plan.spot ?? {};
   for (const a of assets) {

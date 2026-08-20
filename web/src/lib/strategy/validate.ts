@@ -65,8 +65,8 @@ function isUndefinedRiskLeg(plan: StrategyPlan, leg: Leg): boolean {
       // short call is defined-risk only if covered by the underlying
       return heldAmount(plan, leg.asset) <= 0;
     }
-    // short put: cash-secured is bounded, but we can't confirm cash here → treat
-    // as undefined-risk unless an explicit maxLoss cap is set on the plan
+    // short put is bounded when cash-secured (or given an explicit maxLoss)
+    if (leg.sizing.kind === "cash_secured") return false;
     return plan.constraints.maxLossUsd == null;
   }
   return false;
@@ -181,6 +181,18 @@ export function validatePlan(
     if (!hasRepeatableBuy) {
       issues.push(warn("dca_no_spot",
         "Recurring (DCA) plan has no spot/perp buy leg — options aren't a natural fit for a fixed-cadence accumulation."));
+    }
+  }
+
+  // ---- cash-secured feasibility (soft): a put needs ~strike cash/contract ----
+  for (const leg of plan.legs) {
+    if (leg.sizing.kind === "cash_secured" && plan.freeUsdc != null) {
+      const s = plan.spot?.[leg.asset.toUpperCase()];
+      const perContract = s ? s * 0.9 : undefined;
+      if (perContract && plan.freeUsdc < perContract * 0.1) {
+        issues.push(warn("thin_cash",
+          `Only ~$${Math.round(plan.freeUsdc)} USDC free — the agent will size this put to what your cash secures (~${(plan.freeUsdc / perContract).toFixed(2)} contracts) or skip it if below Derive's minimum. This account fits a covered call on what you hold better than a wheel.`, leg.id));
+      }
     }
   }
 

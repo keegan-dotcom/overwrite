@@ -15,6 +15,7 @@ export type Sizing =
   | { kind: "contracts"; amount: number }
   | { kind: "notional_usd"; usd: number }
   | { kind: "pct_of_collateral"; pct: number }
+  | { kind: "cash_secured"; pct?: number } // short puts sized to (pct% of) free USDC
   | { kind: "match_leg"; legId: string };
 
 export type StrikeRule =
@@ -62,6 +63,7 @@ export interface StrategyPlan {
   constraints: Constraints;
   holdings?: { asset: string; amount: number }[];
   spot?: Record<string, number>;
+  freeUsdc?: number; // available USDC collateral, for cash-secured sizing + feasibility
 }
 export interface Capabilities {
   [asset: string]: { spot: boolean; option: boolean; perp: boolean };
@@ -109,6 +111,8 @@ function isUndefinedRiskLeg(plan: StrategyPlan, leg: Leg): boolean {
   if (leg.venue === "perp") return true;
   if (leg.venue === "option" && leg.side === "sell") {
     if (leg.option?.type === "C") return heldAmount(plan, leg.asset) <= 0;
+    // short put is bounded when it's cash-secured (or has an explicit maxLoss)
+    if (leg.sizing.kind === "cash_secured") return false;
     return plan.constraints.maxLossUsd == null;
   }
   return false;
@@ -169,6 +173,18 @@ export function validatePlan(plan: StrategyPlan, caps?: Capabilities): Validatio
     if (!plan.schedule.everyDays || plan.schedule.everyDays <= 0) issues.push(err("bad_cadence", "Recurring schedule needs a positive everyDays cadence."));
     const hasRepeatableBuy = plan.legs.some((l) => (l.venue === "spot" || l.venue === "perp") && l.side === "buy");
     if (!hasRepeatableBuy) issues.push(warn("dca_no_spot", "Recurring (DCA) plan has no spot/perp buy leg."));
+  }
+  // cash-secured feasibility (soft): a put needs ~strike cash per contract. If
+  // free USDC is tiny, the executor will size it down or skip - say so up front.
+  for (const leg of plan.legs) {
+    if (leg.sizing.kind === "cash_secured" && plan.freeUsdc != null) {
+      const s = plan.spot?.[leg.asset.toUpperCase()];
+      const perContract = s ? s * 0.9 : undefined; // rough put strike
+      if (perContract && plan.freeUsdc < perContract * 0.1) {
+        issues.push(warn("thin_cash",
+          `Only ~$${Math.round(plan.freeUsdc)} USDC free — the agent will size this put to what your cash secures (~${(plan.freeUsdc / perContract).toFixed(2)} contracts) or skip it if that's below Derive's minimum. This account fits a covered call on what you already hold better than a wheel.`));
+      }
+    }
   }
   if (plan.constraints.requireDefinedRisk) {
     for (const leg of plan.legs) {
