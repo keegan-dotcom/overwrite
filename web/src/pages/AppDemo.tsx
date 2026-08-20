@@ -9,6 +9,7 @@ import { HostedPanel } from "../components/app/HostedPanel";
 import { Console } from "../components/app/Console";
 import { TermsGate, termsAccepted } from "../components/app/TermsGate";
 import { hostedStatus } from "../lib/hosted";
+import { resolveInstance } from "../lib/instance";
 import { VENUES, VenueMode } from "../data/venues";
 import { StrategyRail } from "../components/app/StrategyRail";
 import { TradeTicket } from "../components/app/TradeTicket";
@@ -496,7 +497,13 @@ export function AppDemo() {
               {connecting ? "connecting…" : wallet ? `${shortAddr(wallet.address)}` : "Connect wallet"}
             </button>
           )}
-          <span className="border border-amber px-1.5 py-1 font-mono text-[9px] uppercase text-amber">demo pricing</span>
+          {resolveInstance() ? (
+            <span className="border-2 border-rose bg-rose/10 px-1.5 py-1 font-mono text-[9px] font-bold uppercase text-rose">
+              ● private mainnet · real funds
+            </span>
+          ) : (
+            <span className="border border-amber px-1.5 py-1 font-mono text-[9px] uppercase text-amber">demo pricing</span>
+          )}
         </div>
 
         {/* wallet-sync progress strip */}

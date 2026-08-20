@@ -4,16 +4,23 @@
  * user authorizes it with one MetaMask tx (same registration flow as the
  * in-browser path). The fleet then trades 24/7 - no laptop required.
  */
-// Default: the public testnet pilot. A private deployment points this at its
-// own project via VITE_FN_BASE (and VITE_CONSOLE_KEY for mainnet status reads).
-const FN = (import.meta as any).env?.VITE_FN_BASE
+import { resolveInstance } from "./instance";
+
+// Default: the public testnet pilot. Overridable per-visitor via the
+// ?instance=private share link (see instance.ts) or per-deployment via
+// VITE_FN_BASE / VITE_CONSOLE_KEY.
+const fnBase = () =>
+  resolveInstance()?.fn
+  ?? (import.meta as any).env?.VITE_FN_BASE
   ?? "https://xbxopobawxsugtfvrjko.supabase.co/functions/v1";
-const CONSOLE_KEY = (import.meta as any).env?.VITE_CONSOLE_KEY ?? "";
+const consoleKey = () =>
+  resolveInstance()?.key ?? (import.meta as any).env?.VITE_CONSOLE_KEY ?? "";
 
 async function post(path: string, body: unknown): Promise<any> {
   const headers: Record<string, string> = { "content-type": "application/json" };
-  if (CONSOLE_KEY) headers["x-console-key"] = CONSOLE_KEY;
-  const r = await fetch(`${FN}/${path}`, {
+  const key = consoleKey();
+  if (key) headers["x-console-key"] = key;
+  const r = await fetch(`${fnBase()}/${path}`, {
     method: "POST",
     headers,
     body: JSON.stringify(body),

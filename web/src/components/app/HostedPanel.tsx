@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { registerSessionKey } from "../../lib/deriveApi";
 import { HostedStatus, hostedActivate, hostedEnroll, hostedStatus } from "../../lib/hosted";
+import { resolveInstance } from "../../lib/instance";
 
 /**
  * Phase 2: the hosted pilot. The backend generates + holds a trading-scoped
@@ -9,6 +10,9 @@ import { HostedStatus, hostedActivate, hostedEnroll, hostedStatus } from "../../
  * Testnet only. Revoke any time at testnet.derive.xyz → Developers.
  */
 export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
+  // private mainnet instance? swap venue links/copy and say REAL FUNDS
+  const priv = resolveInstance();
+  const venueUrl = priv ? "app.derive.xyz" : "testnet.derive.xyz";
   const [deriveWallet, setDeriveWallet] = useState(
     () => { try { return localStorage.getItem("overwrite_derive_wallet") ?? ""; } catch { return ""; } });
   const [st, setSt] = useState<HostedStatus | null>(null);
@@ -25,7 +29,7 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
     try {
       if (!/^0x[0-9a-fA-F]{40}$/.test(deriveWallet)) throw new Error("enter your Derive wallet address");
       if (deriveWallet.toLowerCase() === ownerEoa.toLowerCase()) {
-        throw new Error("that's your MetaMask/Rabby address (the 'Signer'). Enter the 'Wallet' address from testnet.derive.xyz → Developers - it's a different 0x address.");
+        throw new Error(`that's your MetaMask/Rabby address (the 'Signer'). Enter the 'Wallet' address from ${venueUrl} → Developers - it's a different 0x address.`);
       }
       try { localStorage.setItem("overwrite_derive_wallet", deriveWallet); } catch { /* noop */ }
       const e = await hostedEnroll(ownerEoa, deriveWallet);
@@ -74,13 +78,14 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
     <div className="border-2 border-mint bg-pane">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div>
-          <div className="font-mono text-[11px] uppercase tracking-[0.14em] text-mint">
-            Run it 24/7 · hosted pilot (testnet)
+          <div className={`font-mono text-[11px] uppercase tracking-[0.14em] ${priv ? "text-rose" : "text-mint"}`}>
+            {priv ? "Run it 24/7 · PRIVATE MAINNET · REAL FUNDS" : "Run it 24/7 · hosted pilot (testnet)"}
           </div>
           <div className="font-serif text-[12.5px] leading-snug text-fog">
-            Authorize our agent's key once - gasless via Derive's own page, or
-            one signature here. Trading-scoped, can never withdraw. Then the
-            fleet manages your account every 15 minutes, laptop closed.
+            Authorize our agent's key once via Derive's own page. Scope it to
+            "account" (trading only - it can never withdraw). Then the fleet
+            manages your account every 15 minutes, laptop closed.
+            {priv && " This instance trades REAL money on Derive mainnet - allowlisted wallets only, and trading begins on the next 15-minute cycle after you register the key."}
           </div>
         </div>
         {active ? (
@@ -98,7 +103,7 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
       <div className="space-y-2 border-t-2 border-line px-4 py-3">
         <label className="block">
           <span className="font-mono text-[10.5px] uppercase tracking-[0.1em] text-fog">
-            Your Derive wallet — the "Wallet" address at testnet.derive.xyz → Developers (NOT "Signer"/your MetaMask address)
+            Your Derive wallet — the "Wallet" address at {venueUrl} → Developers (NOT "Signer"/your MetaMask address)
           </span>
           <input value={deriveWallet}
             onChange={(e) => setDeriveWallet(e.target.value.trim())}
@@ -124,9 +129,9 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
             <div className="font-serif text-[13px] leading-snug text-paper/85">
               <span className="font-bold text-paper">Gasless (recommended):</span>{" "}
               open{" "}
-              <a href="https://testnet.derive.xyz" target="_blank" rel="noreferrer"
+              <a href={`https://${venueUrl}`} target="_blank" rel="noreferrer"
                  className="text-mint underline decoration-2 underline-offset-2">
-                testnet.derive.xyz
+                {venueUrl}
               </a>{" "}
               → Developers → <em>Register Session Key</em> → paste the address
               above (scope: <span className="font-bold">account</span> — trading
@@ -173,8 +178,9 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
         {err && <div className="border border-rose px-3 py-2 font-mono text-[11.5px] text-rose">{err}</div>}
 
         <div className="font-serif text-[11.5px] italic leading-snug text-fog">
-          Testnet pilot: fake money, real orders, real 24/7 loop. Pause any
-          time by revoking the session key at testnet.derive.xyz → Developers.
+          {priv
+            ? "REAL FUNDS: live orders on Derive mainnet, capped per cycle. Pause any time by revoking the session key at app.derive.xyz → Developers."
+            : "Testnet pilot: fake money, real orders, real 24/7 loop. Pause any time by revoking the session key at testnet.derive.xyz → Developers."}
         </div>
       </div>
     </div>

@@ -1,98 +1,53 @@
-# Private mainnet instance — activation runbook
+# Private mainnet instance — how it works
 
-Infrastructure is deployed and **dormant**. Project: `overwrite-private`
-(`xceljobykjsslgnurogp.supabase.co`), single-tenant, cron every 15 min.
-It runs in TESTNET mode and refuses to trade until YOU complete the steps
-below, in order. Real money — read each step before doing it.
+Project: `overwrite-private` (`xceljobykjsslgnurogp.supabase.co`), pinned to
+**Derive MAINNET** in the deployed functions (the repo copies stay
+env-driven and default to testnet). Fleet cron every 15 min. REAL MONEY.
 
-Engine: covered calls on `config.symbol` (default **XAUT**) + premium
-router sweeping idle USDC into **BTC-USDC** spot. Post-only maker quotes,
-per-day order budget, per-cycle sweep cap, `live:false` dry-run default.
+Engine per tenant: covered calls on `config.symbol` (default **ETH**,
+delta 0.25, 7–45d, post-only) + premium router sweeping idle USDC into
+**BTC-USDC** spot (IOC, ≤$250/cycle). Caps: `max_order` 1 ETH,
+20 orders/day. New tenants default `live: true` — **registering the
+session key on Derive is the owner's authorization to trade**; trading
+starts on the next 15-minute cycle after activation.
 
-## Step 0 — know the risks (once more)
-- The mainnet session key lives AES-GCM-encrypted in this project's DB.
-  The encryption key derives from `KEYSTORE_SECRET`, which only you set and
-  which is never stored in the database — but a full compromise of your
-  Supabase account could still TRADE (never withdraw) this subaccount.
-- XAUT options launched 2026-07-24 and the book is thin (sampled OTM calls
-  showed zero live bids). Post-only quotes may sit unfilled for a long time.
-  Size accordingly; `max_order` defaults to 0.5 XAUT.
-
-## Step 1 — set the function secrets (BEFORE enrolling)
-Supabase dashboard → `overwrite-private` → Edge Functions → Secrets:
-- `DERIVE_ENV` = `prod`
-- `KEYSTORE_SECRET` = a long random string you generate and keep
-  (e.g. `openssl rand -hex 32` in Terminal). Losing it = re-enroll.
-
-Order matters: a key enrolled before `KEYSTORE_SECRET` exists is encrypted
-with the wrong key and becomes undecryptable when you set it.
-
-## Step 2 — fund the mainnet account
-1. app.derive.xyz → create/sign in to your MAINNET account.
-2. Deposit XAUT (and a little USDC) into your subaccount.
-3. Developers page → copy the **Wallet** address (not Signer).
-
-## Step 3 — enroll and authorize the key
-```bash
-# get the fleet's session key address (generates + stores it encrypted)
-curl -s -X POST https://xceljobykjsslgnurogp.supabase.co/functions/v1/overwrite-enroll \
-  -H 'content-type: application/json' \
-  -d '{"action":"enroll","owner_eoa":"<YOUR_EOA>","derive_wallet":"<DERIVE_WALLET>"}'
+## The share link (whitelisted users only)
 ```
-Register the returned `session_key_address` at app.derive.xyz → Developers →
-Register Session Key — **scope: account** (trading only), name ≤16 chars.
-Then:
-```bash
-curl -s -X POST .../overwrite-enroll -H 'content-type: application/json' \
-  -d '{"action":"activate","derive_wallet":"<DERIVE_WALLET>"}'
+https://overwrite.pro/app?instance=private&ikey=<console_key>
 ```
+The link flips the app onto this instance (persists in the browser;
+`?net=public` resets). A "PRIVATE MAINNET · REAL FUNDS" chip replaces the
+demo badge. Enrollment is server-side allowlist-gated, so the link itself
+only grants read access via the console key.
 
-## Step 4 — watch DRY cycles (recommended: at least a few hours)
-Every 15 min the fleet logs the EXACT order it would place, placing nothing:
-```bash
-# console key (printed once): SQL editor → select value from fleet_config where key='console_key';
-curl -s "https://xceljobykjsslgnurogp.supabase.co/functions/v1/overwrite-status?wallet=<DERIVE_WALLET>&key=<CONSOLE_KEY>"
-```
-Look for `DRY (live:false) - would quote SELL …` and `DRY sweep - would BUY …`
-and sanity-check strikes, sizes, prices.
+## User flow (you and each whitelisted friend)
+1. Open the share link → accept the terms gate.
+2. Connect wallet → open **24/7 hosted** after deploying a strategy
+   (or straight from the ticket footer).
+3. Enter your MAINNET Derive "Wallet" address (app.derive.xyz →
+   Developers — not the Signer address) → **Go 24/7**.
+4. Register the shown session key at app.derive.xyz → Developers →
+   scope **account**, name ≤16 chars → "I registered it → activate".
+5. Done. First quote goes out within 15 minutes. Watch it in the Console tab.
 
-## Step 5 — go live (the switch is yours)
-SQL editor:
+## Allowlist (who may enroll)
+`fleet_config.allowlist` — comma-separated EOAs or Derive wallets,
+case-insensitive; tenant count capped at list length. Add someone:
 ```sql
-update tenants set config = jsonb_set(config, '{live}', 'true');
+update fleet_config set value = value || ',0xTHEIR_ADDRESS' where key='allowlist';
 ```
 
-## Kill switches (any of these stops it)
-- `update tenants set kill = true;`            -- instant, keeps state
-- `update tenants set config = jsonb_set(config, '{live}', 'false');` -- back to dry-run
-- Revoke the session key at app.derive.xyz → Developers  -- venue-level, absolute
-- `select cron.unschedule('overwrite-fleet-15m');`        -- stops the clock
+## Kill switches
+- Per user: `update tenants set kill = true where derive_wallet ilike '0x…';`
+- Per user, softer: set `config.live` to `false` (dry-run: logs exact orders, places none)
+- Owner-side absolute: revoke the session key at app.derive.xyz → Developers
+- Whole instance: `select cron.unschedule('overwrite-fleet-15m');`
 
-## Config reference (tenants.config)
-`symbol` XAUT | ETH | BTC · `dte_min/max` expiry window · `delta_target`
-strike selection · `min_yield` annualized floor · `min_order/max_order`
-contracts · `max_orders_per_day` quote budget ·
-`sweep.buy` BTC (or null to disable) · `sweep.keep_usdc_float` USDC kept ·
-`sweep.min_sweep_usd` / `sweep.max_sweep_usd` per-cycle bounds · `live` the switch.
-
-## Allowlist — who may enroll
-Enrollment is closed: only addresses in the `allowlist` row of
-`fleet_config` (comma-separated, EOA or Derive wallet, case-insensitive)
-can enroll, and the tenant count is capped at the list length. Your EOA
-(`0x2473…BeaA`) is pre-seeded. To add a friend:
+## Custody note (accepted tradeoff, on the record)
+The keystore secret is embedded in the deployed function code (owner opted
+out of dashboard-managed secrets), so compromise of the Supabase account
+could trade — never withdraw — enrolled accounts. Recovery copy of the
+secret is held by the owner. Config changes per tenant:
 ```sql
-update fleet_config
-set value = value || ',0xFRIEND_EOA_OR_DERIVE_WALLET'
-where key = 'allowlist';
+update tenants set config = config || '{"max_order": 0.5}' where derive_wallet ilike '0x…';
 ```
-Each friend goes through the same Step 3 flow with their own wallet, gets
-their own session key (registered and revocable only by them), their own
-isolated tenant row, and their own `live` flag. Before letting anyone
-trade real money here: have them read overwrite.pro/security and accept
-the same terms the public app gates on - and remember my standing
-recommendation of a third-party audit before third-party funds.
-
-## Private web console (optional)
-Deploy a second Vercel project from this repo with env:
-`VITE_FN_BASE=https://xceljobykjsslgnurogp.supabase.co/functions/v1` and
-`VITE_CONSOLE_KEY=<console_key>` — the app's Console then reads this instance.
