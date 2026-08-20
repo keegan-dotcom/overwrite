@@ -4,6 +4,7 @@ import { connectWallet, hasWallet, shortAddr, WalletState } from "../lib/wallet"
 import { callPrice, strikeForYield, fmtUsd, fmtPct } from "../lib/options";
 import { parseIntent } from "../lib/intent";
 import { planAndValidate, describePlan } from "../lib/strategy/planner";
+import { refreshLivePrices } from "../lib/prices";
 import { RunItYourself } from "../components/app/RunItYourself";
 import { TestnetPanel } from "../components/app/TestnetPanel";
 import { HostedPanel } from "../components/app/HostedPanel";
@@ -109,6 +110,7 @@ export function AppDemo() {
   // the last chat-built plan that PASSED the coherence validator (deployable)
   const [pendingPlan, setPendingPlan] = useState<import("../lib/strategy/ir").StrategyPlan | null>(null);
   const [deploying, setDeploying] = useState(false);
+  const [, setPricesTick] = useState(0); // bump to re-render when live prices land
   const timers = useRef<number[]>([]);
   const ticketRef = useRef<HTMLDivElement>(null);
   const idRef = useRef(1);
@@ -284,6 +286,17 @@ export function AppDemo() {
     const id = window.setInterval(() => void refreshHosted(), 20_000);
     return () => window.clearInterval(id);
   }, [wallet, onMainnet, refreshHosted]);
+
+  // live prices: patch the baked demo prices with Derive's real index prices so
+  // the agent never suggests trades off stale numbers. Refreshes on mount + 60s.
+  useEffect(() => {
+    const pull = () => void refreshLivePrices().then((u) => {
+      if (Object.keys(u).length) setPricesTick((n) => n + 1);
+    });
+    pull();
+    const id = window.setInterval(pull, 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   /** Structure the intent, run the honesty check, post the agent's reply. */
   const applyIntent = useCallback((p: IncomingIntent) => {
