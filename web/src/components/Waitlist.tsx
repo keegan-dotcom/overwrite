@@ -48,7 +48,7 @@ export function Waitlist() {
           title={<>Don't want to run a terminal? <span className="text-accent">Join the hosted list.</span></>}
         >
           Same agent, same rails, zero setup: connect a trading-scoped session
-          key (it can never withdraw — custody stays with your wallet), pick
+          key (revocable in one click; withdrawals only pay back to your own wallet), pick
           your delta, watch the premium. We run the loop.
         </SectionHead>
 

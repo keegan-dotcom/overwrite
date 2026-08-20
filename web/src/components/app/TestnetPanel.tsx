@@ -13,7 +13,8 @@ import {
  *
  * - session key generated in-browser (localStorage), registered with ONE
  *   MetaMask transaction on Derive Chain (owner pays testnet gas)
- * - the key can trade this account; it can never withdraw
+ * - the key is admin-scoped (Derive has no trade-only scope); revocable
+ *   anytime; the plain withdraw endpoint only pays back to the owner wallet
  * - orders are signed locally and sent via our CORS proxy; testnet only
  */
 type Step = "idle" | "quote" | "key" | "ready" | "placing" | "done" | "error";
@@ -75,7 +76,7 @@ export function TestnetPanel({
           if (await sessionKeyActive(pk, deriveWallet)) break;
           if (i === 11) throw new Error("session key not active yet - wait a minute and retry");
         }
-        say("session key active ✓ (trading-scoped: it can never withdraw)");
+        say("session key active ✓ (admin scope — revoke anytime on Derive)");
       }
       setStep("ready");
     } catch (e) {

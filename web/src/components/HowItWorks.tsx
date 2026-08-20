@@ -5,7 +5,7 @@ const steps = [
   {
     n: "A",
     title: "Hold",
-    body: "Your asset sits as collateral in a Derive subaccount you control. The agent holds a session key scoped to trading only — it can never withdraw.",
+    body: "Your asset sits as collateral in a Derive subaccount you control. The agent holds a session key you register on Derive and can revoke in one click. The plain withdraw endpoint only pays out to your own wallet — never an address we choose.",
     mono: "session_key.scope = trade",
   },
   {

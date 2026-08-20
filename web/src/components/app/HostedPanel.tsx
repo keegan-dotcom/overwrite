@@ -82,10 +82,12 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
             {priv ? "Run it 24/7 · PRIVATE MAINNET · REAL FUNDS" : "Run it 24/7 · hosted pilot (testnet)"}
           </div>
           <div className="font-serif text-[12.5px] leading-snug text-fog">
-            Authorize our agent's key once via Derive's own page. Scope it to
-            "account" (trading only - it can never withdraw). Then the fleet
-            manages your account every 15 minutes, laptop closed.
-            {priv && " This instance trades REAL money on Derive mainnet - allowlisted wallets only, and trading begins on the next 15-minute cycle after you register the key."}
+            Authorize our agent's key once via Derive's own page (scope
+            <span className="font-bold"> admin</span> — Derive has no
+            trade-only scope, so a key that trades needs admin). Revoke it any
+            time in one click. Then the fleet manages your account every 15
+            minutes, laptop closed.
+            {priv && " This instance trades REAL money on Derive mainnet — allowlisted wallets only. Only fund it with what you can afford to lose; trading begins on the next 15-minute cycle after you register the key."}
           </div>
         </div>
         {active ? (
@@ -134,10 +136,10 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
                 {venueUrl}
               </a>{" "}
               → Developers → <em>Register Session Key</em> → paste the address
-              above (scope: <span className="font-bold">account</span> — trading
-              only, never withdrawals; any expiry; keep the name ≤16 characters
-              — e.g. "Overwrite Fleet" — their name field errors on longer) →
-              Derive pays the gas. Then:
+              above (scope: <span className="font-bold">admin</span> — required
+              to place orders; Derive has no trade-only scope; revoke anytime;
+              any expiry; keep the name ≤16 characters — e.g. "Overwrite Live"
+              — their name field errors on longer) → Derive pays the gas. Then:
             </div>
             <div className="flex flex-wrap gap-2">
               <button onClick={checkActivation} disabled={busy}

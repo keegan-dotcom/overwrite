@@ -55,8 +55,9 @@ claude mcp add overwrite -- python3 -m agent.mcp_server
 Put your Derive keys in `.env` as usual (`DERIVE_WALLET`,
 `DERIVE_SESSION_KEY`, `DERIVE_SUBACCOUNT_ID`) — the session key is a
 one-time wallet signature and stays on your machine. The MCP server never
-sees your seed phrase and cannot withdraw funds (session keys are
-trading-scoped by Derive).
+sees your seed phrase. NOTE: a key that trades is admin-scoped (Derive
+has no trade-only scope); it is revocable anytime and the plain withdraw
+endpoint pays only to your own wallet.
 
 ## ChatGPT / Codex / any MCP client
 

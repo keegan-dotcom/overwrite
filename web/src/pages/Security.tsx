@@ -49,12 +49,12 @@ const FINDINGS: Finding[] = [
     fix: "Accepted for the testnet pilot and disclosed here. Before any real-money version: dedicated KMS/HSM custody, per-tenant key derivation, and a third-party audit. You can revoke our key at any time at testnet.derive.xyz → Developers.",
   },
   {
-    sev: "LOW",
-    title: "\"Cannot withdraw\" depends on the scope YOU pick at registration",
+    sev: "MEDIUM",
+    title: "Derive has no trade-only key scope — a trading key is admin-scoped",
     detail:
-      "You authorize our agent's key in Derive's own interface and choose its scope there. Our instructions say scope \"account\" (trading only). If you choose \"admin\" instead, the key has broader account permissions than we need or want.",
-    status: "DISCLOSED",
-    fix: "Instructions updated to explicitly say scope: account. We will verify scope enforcement end-to-end with the Derive team before any mainnet release.",
+      "We previously said the agent's session key is \"trading-scoped and can never withdraw.\" That was wrong. Derive v2 has three scopes: read-only, account (can cancel/attributes but CANNOT place orders), and admin (can trade — and also deposit/withdraw/transfer). Because only admin can trade, any key that actually runs a strategy is admin-scoped. So the blanket \"can never withdraw\" guarantee did not hold.",
+    status: "FIXED",
+    fix: "Every \"can never withdraw\" claim removed from the site, app, and terms. Mitigating facts, verified against the live API: the plain private/withdraw endpoint has NO recipient parameter — it pays out only to your own Derive wallet, not an address we choose — and you can revoke the key in one click at app.derive.xyz → Developers. Residual risk (disclosed): admin scope also grants transfer endpoints, so we do not claim a compromised key is incapable of moving funds. Fund the hosted agent only with what you can afford to lose; the self-hosted agent keeps the key on your own machine.",
   },
   {
     sev: "LOW",
@@ -170,7 +170,7 @@ export function Security() {
             <div className="mb-2 font-mono text-[11px] uppercase tracking-[0.14em] text-rose">It cannot</div>
             <ul className="space-y-1.5 font-serif text-[13.5px] leading-snug text-paper/85">
               <li>→ Touch mainnet or any real asset (endpoints are hardcoded to testnet; the agent has a mainnet hard-gate)</li>
-              <li>→ Withdraw or transfer funds anywhere (register the key with scope "account")</li>
+              <li>→ Withdraw to an arbitrary address via the plain withdraw endpoint (it has no recipient field — it pays back only to your own wallet). Note: the key is admin-scoped because Derive has no trade-only scope, so revoke it when you're done and only fund what you can afford to lose.</li>
               <li>→ See your seed phrase or private keys — it never asks, and you should never share them with anyone</li>
               <li>→ Keep trading after you revoke the key at testnet.derive.xyz → Developers</li>
             </ul>

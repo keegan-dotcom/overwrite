@@ -48,8 +48,9 @@ Tools: `setup_check`, `quote_strategy`, `generate_config`, `preflight`,
    wallet at testnet.derive.xyz and sign to enable trading (creates their
    Derive smart-contract wallet + subaccount) → get Sepolia ETH from any
    public faucet → use the testnet drip INSIDE the deposit flow for USDC
-   + the asset to overwrite → create a trading-scoped session key
-   (Developers → Session Keys; it can trade, never withdraw) → fill
+   + the asset to overwrite → create a session key
+   (Developers → Session Keys; scope admin - Derive has no trade-only
+   scope; revoke anytime) → fill
    `DERIVE_WALLET` (the smart-contract wallet, not their EOA),
    `DERIVE_SESSION_KEY`, `DERIVE_SUBACCOUNT_ID` in `.env` themselves.
 3. `quote_strategy` from their words → `generate_config` → `preflight`

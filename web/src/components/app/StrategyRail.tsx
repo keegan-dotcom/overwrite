@@ -130,7 +130,7 @@ export function StrategyRail({
       )}
 
       <div className="border-t border-line px-3 py-1.5 font-serif text-[10.5px] italic leading-snug text-fog">
-        One isolated vault per user — only your keys withdraw.
+        One isolated account per user · revoke the agent's key anytime.
       </div>
     </div>
   );

@@ -63,7 +63,7 @@ drive this sequence yourself - don't hand them a doc:
 4. **Session key** (the one step that makes the agent able to trade):
    testnet.derive.xyz → **Developers → Session Keys** → register a new
    key with **trading scope**. It's authorized by a wallet signature; the
-   key can trade but can NEVER withdraw. They copy its **private key**
+   key is admin-scoped (Derive has no trade-only scope) and revocable anytime. They copy its **private key**
    into `.env` themselves - never into chat.
 5. **Identifiers for .env**:
    - `DERIVE_WALLET` = the Derive smart-contract wallet address (in the

@@ -5,7 +5,7 @@
  *
  * The session key private key is generated IN THE BROWSER and never leaves
  * localStorage. It can trade on the subaccount it's registered to; it can
- * never withdraw (Derive protocol guarantee).
+ * admin-scoped (Derive has no trade-only scope); revocable anytime.
  */
 import { encodeAbiParameters, keccak256, getAddress, type Hex } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";

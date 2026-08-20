@@ -25,7 +25,7 @@ export const VENUES: Record<VenueMode, VenueInfo> = {
     short: "v2",
     endpoint: "api-demo.lyra.finance",
     settlement: "on-chain settlement (Derive Chain)",
-    keyScope: "trading-scoped session key · cannot withdraw",
+    keyScope: "session key you register · revoke anytime",
     vaultNote:
       "One vault per user. No pooled funds, no shared honeypot - a hack of someone else's vault can't touch yours.",
     extraManaged: [],

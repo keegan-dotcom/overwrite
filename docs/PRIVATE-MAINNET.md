@@ -27,7 +27,8 @@ only grants read access via the console key.
 3. Enter your MAINNET Derive "Wallet" address (app.derive.xyz →
    Developers — not the Signer address) → **Go 24/7**.
 4. Register the shown session key at app.derive.xyz → Developers →
-   scope **account**, name ≤16 chars → "I registered it → activate".
+   scope **admin** (Derive has no trade-only scope; required to trade),
+   name ≤16 chars → "I registered it → activate".
 5. Done. First quote goes out within 15 minutes. Watch it in the Console tab.
 
 ## Allowlist (who may enroll)

@@ -25,7 +25,7 @@ const CARDS = [
   {
     kicker: "For hands-off · testnet pilot live",
     title: "Hosted",
-    body: "The agent runs 24/7 without your laptop: one isolated account per user, a session key scoped so it can trade but never withdraw, cycles every 15 minutes. Live on testnet now - one signature in the app turns it on. Mainnet joins via the waitlist.",
+    body: "The agent runs 24/7 without your laptop: one isolated account per user, a session key you register on Derive and revoke in one click, cycles every 15 minutes. Live on testnet now - one signature in the app turns it on. Mainnet joins via the waitlist.",
     cta: { label: "Try the pilot →", to: "/app" },
     foot: "Per-user isolation · revoke any time · mainnet waitlist open",
   },

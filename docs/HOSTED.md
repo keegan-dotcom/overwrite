@@ -11,8 +11,11 @@ quotes, fills, premium ledger, and every risk-rail event. Email/Telegram
 alerts on fills, defensive rolls, and pauses. That's the whole surface.
 
 **The custody line that makes this product possible:** users register a
-session key scoped to *trading only* on their own Derive subaccount. Hosted
-Overwrite can quote and manage positions; it structurally cannot withdraw.
+session key on their own Derive subaccount. NOTE: Derive v2 has no
+trade-only scope - the key must be admin-scoped to place orders, which also
+permits withdraw/transfer. The plain withdraw endpoint has no recipient
+parameter (pays only to the owner's wallet), and the key is revocable
+anytime. Do NOT claim it "cannot withdraw".
 Users revoke the key in the Derive UI at any time - that's their kill switch,
 independent of us. No deposits, no pooling, no NAV.
 
@@ -57,7 +60,7 @@ user browser ── Next.js app (Vercel) ── Postgres (users, configs, key re
 ## Legal questions for counsel (before mainnet US users)
 
 1. Running a rules-encoded agent on a user's delegated, non-custodial,
-   trading-scoped key, with parameters chosen by the user: does this cross
+   admin-scoped key, with parameters chosen by the user: does this cross
    into discretionary investment management / IAA "advice" (IOSCO FR/06/2025
    treats auto-execution as discretionary in most regimes)? Does the user
    selecting all parameters + revocable key change the analysis?
