@@ -5,7 +5,7 @@
  * Every plan it emits is run through the validator before it's shown or
  * deployed, so an incoherent mapping is caught here just like a bad LLM plan.
  */
-import { ASSETS } from "../../data/appdata";
+import { ASSETS, DEMO_PORTFOLIO } from "../../data/appdata";
 import type { ParsedIntent } from "../intent";
 import { StrategyPlan, Leg, Capabilities } from "./ir";
 import { validatePlan, ValidationResult } from "./validate";
@@ -138,6 +138,9 @@ export function planFromIntent(parsed: ParsedIntent): StrategyPlan {
     schedule: { kind: "once" },
     constraints,
     spot: { [asset]: spot },
+    // preview holdings so coverage checks (covered call / collar / shield) are
+    // realistic client-side. The executor re-hydrates real holdings at run time.
+    holdings: DEMO_PORTFOLIO.map((h) => ({ asset: h.symbol, amount: h.qty })),
   };
 }
 
