@@ -536,7 +536,8 @@ export function AppDemo() {
 
         {/* live agent status + controls (mainnet, connected, enrolled) */}
         {onMainnet && wallet && hostedSt?.enrolled && (
-          <AgentBar st={hostedSt} deriveWallet={hostedSt.derive_wallet ?? wallet.address} onChanged={refreshHosted} />
+          <AgentBar st={hostedSt} deriveWallet={hostedSt.derive_wallet ?? wallet.address}
+            ownerEoa={wallet.address} onChanged={refreshHosted} />
         )}
         {/* mainnet, connected, but this wallet isn't set up / whitelisted */}
         {onMainnet && wallet && !connecting && hostedSt === null && (

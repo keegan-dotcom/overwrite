@@ -6,17 +6,17 @@
  *                 server-side by an allowlist, so a non-whitelisted wallet can
  *                 select it and browse but can't set up or trade.
  *
- * The mainnet read key is baked in so the dropdown "just works" for everyone.
- * It only grants read access to tenant status; who can trade is the allowlist.
- * (Pilot tradeoff: mainnet positions are readable by wallet address. Only
- * whitelisted wallets have any data. Sign-in auth is the pre-scale fix.)
+ * Reads are public (mainnet status by wallet address — only whitelisted
+ * wallets have any data). Trading is gated by the allowlist at enrollment,
+ * and go-live/pause/kill require a wallet signature from the account owner.
+ * (Pilot tradeoff: positions are readable by address; a wallet-signature
+ * read gate is the pre-scale hardening step.)
  */
 export type Network = "demo" | "mainnet";
 export type Instance = { fn: string; key: string; label: string };
 
 const LS = "overwrite_network";
 const MAINNET_FN = "https://dpfsvupqssfzwsnhpdmg.supabase.co/functions/v1"; // eu-central-1
-const MAINNET_KEY = "b9206d50965b73585044b68f1f684178c826";
 
 export function getNetwork(): Network {
   try {
@@ -39,5 +39,5 @@ export function setNetwork(n: Network) {
 /** The active private instance, or null on the demo network. */
 export function resolveInstance(): Instance | null {
   if (getNetwork() !== "mainnet") return null;
-  return { fn: MAINNET_FN, key: MAINNET_KEY, label: "MAINNET · REAL FUNDS" };
+  return { fn: MAINNET_FN, key: "", label: "MAINNET · REAL FUNDS" };
 }

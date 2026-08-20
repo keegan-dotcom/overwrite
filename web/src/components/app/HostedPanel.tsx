@@ -33,7 +33,11 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
       }
       try { localStorage.setItem("overwrite_derive_wallet", deriveWallet); } catch { /* noop */ }
       const e = await hostedEnroll(ownerEoa, deriveWallet);
-      if (e.error) throw new Error(e.error);
+      if (e.error) throw new Error(
+        e.error === "not_on_allowlist"
+          ? "This wallet isn\u2019t whitelisted for mainnet trading yet. Ask Keegan to add your address."
+          : e.error === "instance_full" ? "This private instance is full."
+          : e.error);
       await refresh(deriveWallet); // shows the registration options block
     } catch (e2) {
       setErr(String((e2 as Error).message ?? e2));
@@ -172,7 +176,7 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
                     "Go LIVE with real funds on Derive mainnet?\n\nThe agent will place real orders on its next 15-minute cycle. You can pause anytime.")) {
                     return;
                   }
-                  await hostedSetLive(deriveWallet, next);
+                  await hostedSetLive(deriveWallet, ownerEoa, next);
                   await refresh(deriveWallet);
                 } catch (e2) { setErr(String((e2 as Error).message ?? e2)); }
                 finally { setBusy(false); }

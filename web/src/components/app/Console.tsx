@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { HostedStatus, hostedStatus } from "../../lib/hosted";
+import { HostedStatus, hostedStatus, strategyLabel } from "../../lib/hosted";
 import { fmtUsd } from "../../lib/options";
 import { getNetwork } from "../../lib/instance";
 
@@ -112,6 +112,7 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
         <span className={active ? "text-mint" : "text-amber"}>
           ● {active ? "agent active" : st.status}
         </span>
+        <span className="font-bold text-paper">{strategyLabel(st.config)}</span>
         {st.subaccount_id != null && <span className="text-fog">subaccount {st.subaccount_id}</span>}
         {st.last_cycle_at && (
           <span className="text-fog">last cycle {new Date(st.last_cycle_at).toLocaleTimeString()}</span>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { HostedStatus, hostedSetLive, hostedPause } from "../../lib/hosted";
+import { HostedStatus, hostedSetLive, hostedPause, strategyLabel } from "../../lib/hosted";
 import { fmtUsd } from "../../lib/options";
 
 /**
@@ -10,10 +10,11 @@ import { fmtUsd } from "../../lib/options";
  * the demo network and for non-enrolled wallets.
  */
 export function AgentBar({
-  st, deriveWallet, onChanged,
+  st, deriveWallet, ownerEoa, onChanged,
 }: {
   st: HostedStatus;
   deriveWallet: string;
+  ownerEoa: string;
   onChanged: () => void;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
@@ -46,7 +47,13 @@ export function AgentBar({
           <span className={state.cls}>{state.text}</span>
         </span>
 
-        {/* what's actually running */}
+        {/* the strategy the agent is running */}
+        <span className="font-mono text-[11px] font-bold uppercase tracking-[0.04em] text-paper">
+          {strategyLabel(st.config)}
+        </span>
+        <span className="h-3.5 w-px bg-line" />
+
+        {/* what's actually resting/held right now */}
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-fog">
           {orders.length > 0
             ? orders.map((o) =>
@@ -65,13 +72,13 @@ export function AgentBar({
         <div className="flex items-center gap-1.5">
           {!killed && (
             live ? (
-              <button onClick={() => act("pause", () => hostedSetLive(deriveWallet, false))}
+              <button onClick={() => act("pause", () => hostedSetLive(deriveWallet, ownerEoa, false))}
                 disabled={!!busy}
                 className="border-2 border-amber px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase text-amber transition-colors hover:bg-amber hover:text-ink disabled:opacity-50">
                 {busy === "pause" ? "…" : "Pause"}
               </button>
             ) : (
-              <button onClick={() => act("live", () => hostedSetLive(deriveWallet, true),
+              <button onClick={() => act("live", () => hostedSetLive(deriveWallet, ownerEoa, true),
                 "Go LIVE with real funds on Derive mainnet?\n\nThe agent places real orders on its next cycle. You can pause anytime.")}
                 disabled={!!busy}
                 className="border-2 border-paper bg-accent px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-y-px disabled:opacity-50">
@@ -80,13 +87,13 @@ export function AgentBar({
             )
           )}
           {killed ? (
-            <button onClick={() => act("resume", () => hostedPause(deriveWallet, false))}
+            <button onClick={() => act("resume", () => hostedPause(deriveWallet, ownerEoa, false))}
               disabled={!!busy}
               className="border-2 border-mint px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase text-mint transition-colors hover:bg-mint hover:text-ink disabled:opacity-50">
               {busy === "resume" ? "…" : "Un-kill"}
             </button>
           ) : (
-            <button onClick={() => act("kill", () => hostedPause(deriveWallet, true),
+            <button onClick={() => act("kill", () => hostedPause(deriveWallet, ownerEoa, true),
               "KILL the agent?\n\nIt stops immediately and places no more orders. Your positions are untouched. You can un-kill later.")}
               disabled={!!busy}
               className="border-2 border-rose px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase text-rose transition-colors hover:bg-rose hover:text-ink disabled:opacity-50">
