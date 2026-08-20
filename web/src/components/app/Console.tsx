@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { HostedStatus, hostedStatus } from "../../lib/hosted";
 import { fmtUsd } from "../../lib/options";
+import { getNetwork } from "../../lib/instance";
 
 /**
  * The Console: your real account, live from Derive testnet. Positions, open
@@ -12,6 +13,7 @@ import { fmtUsd } from "../../lib/options";
  * hosted setup, or the connected EOA (the backend maps it to your account).
  */
 export function Console({ ownerEoa }: { ownerEoa: string | null }) {
+  const net = getNetwork() === "mainnet" ? "mainnet" : "testnet";
   const [savedWallet, setSavedWallet] = useState(() => {
     try { return localStorage.getItem("overwrite_derive_wallet") ?? ""; } catch { return ""; }
   });
@@ -56,7 +58,7 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
         <div className="font-display text-2xl uppercase text-paper">Your account console</div>
         <p className="mt-2 font-serif text-[14px] leading-relaxed text-paper/85">
           Live positions, open orders, collateral and premium collected — pulled
-          straight from your Derive testnet account. It lights up once the 24/7
+          straight from your Derive {net} account. It lights up once the 24/7
           agent is running:
         </p>
         <ol className="mt-3 list-decimal space-y-1.5 pl-5 font-serif text-[13.5px] text-paper/85">
@@ -233,8 +235,8 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
       </div>
 
       <p className="px-1 font-serif text-[11px] italic text-fog">
-        Derive testnet · read-only view via the fleet's trading-scoped key ·
-        revoke any time at testnet.derive.xyz → Developers
+        Derive {net} · live read via the fleet's key · revoke any time at
+        {net === "mainnet" ? "app.derive.xyz" : "testnet.derive.xyz"} → Developers
       </p>
     </div>
   );

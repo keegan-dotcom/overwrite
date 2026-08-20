@@ -41,6 +41,7 @@ export type HostedStatus = {
   derive_wallet?: string;
   status?: "awaiting_registration" | "active" | "paused" | "error";
   config?: { live?: boolean; symbol?: string; [k: string]: unknown };
+  kill?: boolean;
   subaccount_id?: number;
   session_key_address?: string;
   premium_recent?: number;

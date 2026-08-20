@@ -8,8 +8,9 @@ import { TestnetPanel } from "../components/app/TestnetPanel";
 import { HostedPanel } from "../components/app/HostedPanel";
 import { Console } from "../components/app/Console";
 import { TermsGate, termsAccepted } from "../components/app/TermsGate";
-import { hostedStatus } from "../lib/hosted";
-import { resolveInstance } from "../lib/instance";
+import { hostedStatus, HostedStatus } from "../lib/hosted";
+import { resolveInstance, getNetwork, setNetwork } from "../lib/instance";
+import { AgentBar } from "../components/app/AgentBar";
 import { VENUES, VenueMode } from "../data/venues";
 import { StrategyRail } from "../components/app/StrategyRail";
 import { TradeTicket } from "../components/app/TradeTicket";
@@ -117,6 +118,8 @@ export function AppDemo() {
   // your Derive testnet trading account (collateral the agent actually trades),
   // found via the connected signing wallet - kept separate from on-chain balances
   const [deriveAcct, setDeriveAcct] = useState<{ sub: number | null; holdings: Holding[]; usdc: number } | null>(null);
+  const [hostedSt, setHostedSt] = useState<HostedStatus | null>(null);
+  const onMainnet = getNetwork() === "mainnet";
   const [view, setView] = useState<"trade" | "console">("trade");
   // Connected: show YOUR portfolio - real balances where we can read them,
   // zeros for the rest, so it's obvious the screen is no longer demo data.
@@ -203,10 +206,11 @@ export function AppDemo() {
     // your tradable assets live INSIDE your Derive testnet account as
     // collateral, not in the EOA - if this address owns (or signs for) a
     // hosted account, show THOSE balances in the vault
-    setConnecting("checking your Derive testnet account…");
+    setConnecting(onMainnet ? "checking your Derive mainnet account…" : "checking your Derive testnet account…");
     let acct: { sub: number | null; holdings: Holding[]; usdc: number } | null = null;
     try {
       const st = await hostedStatus(w.address);
+      setHostedSt(st.enrolled ? st : null);
       if (st.enrolled && (st.collaterals?.length ?? 0) > 0) {
         const round4 = (x: number) => Math.round(x * 10_000) / 10_000;
         acct = {
@@ -236,14 +240,14 @@ export function AppDemo() {
         text: owned.length || (acct && usdcSeen > 0)
           ? `Connected ${shortAddr(w!.address)} (read-only).${
               acct
-                ? ` Found your Derive testnet account${acct.sub != null ? ` (subaccount ${acct.sub})` : ""} - the vault shows what's in it${seen ? `: ${seen}` : ""}${usdcSeen > 0 ? `${seen ? " and" : ":"} $${usdcSeen.toLocaleString()} USDC` : ""}. That's what the agent trades; your wallet's own balances are listed separately below it.`
+                ? ` Found your Derive ${onMainnet ? "mainnet" : "testnet"} account${acct.sub != null ? ` (subaccount ${acct.sub})` : ""} - the vault shows what's in it${seen ? `: ${seen}` : ""}${usdcSeen > 0 ? `${seen ? " and" : ":"} $${usdcSeen.toLocaleString()} USDC` : ""}. That's what the agent trades; your wallet's own balances are listed separately below it.`
                 : ` I can see ${seen}${usdcSeen > 0 ? ` and $${usdcSeen.toLocaleString()} USDC` : ""}.`
             }${
               best
                 ? ` Your largest holding is ${best.symbol}, so I've structured a suggested trade on it - the ticket is live. Approve & deploy, or tell me what you'd rather do.`
                 : " Every ticket is now sized to what you actually hold."
             }`
-          : `Connected ${shortAddr(w!.address)} (read-only), but your balances read zero on this ${w!.chainId === 1 ? "wallet" : "network (switch to Ethereum mainnet for token balances)"} and I didn't find a Derive testnet account for this address - your portfolio shows the zeros, and tickets are previews sized to 1 unit until you hold something.`,
+          : `Connected ${shortAddr(w!.address)} (read-only), but your balances read zero on this ${w!.chainId === 1 ? "wallet" : "network (switch to Ethereum mainnet for token balances)"} and I didn't find a Derive ${onMainnet ? "mainnet" : "testnet"} account for this address - your portfolio shows the zeros, and tickets are previews sized to 1 unit until you hold something.`,
       },
     ]);
   }, []);
@@ -260,6 +264,22 @@ export function AppDemo() {
     later(700, () => setConnecting(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet]);
+
+  // re-pull the hosted agent's live state (status, open orders, live flag) -
+  // on demand after a control action, and on a 20s poll while connected
+  const refreshHosted = useCallback(async () => {
+    if (!wallet) return;
+    try {
+      const st = await hostedStatus(wallet.address);
+      setHostedSt(st.enrolled ? st : null);
+    } catch { /* endpoint hiccup - keep last view */ }
+  }, [wallet]);
+
+  useEffect(() => {
+    if (!wallet || !onMainnet) return;
+    const id = window.setInterval(() => void refreshHosted(), 20_000);
+    return () => window.clearInterval(id);
+  }, [wallet, onMainnet, refreshHosted]);
 
   /** Structure the intent, run the honesty check, post the agent's reply. */
   const applyIntent = useCallback((p: IncomingIntent) => {
@@ -485,9 +505,17 @@ export function AppDemo() {
               );
             })}
           </div>
-          <select value={venueMode} onChange={(e) => setVenueMode(e.target.value as VenueMode)}
-            className="border border-line bg-ink px-1.5 py-1 font-mono text-[10px] uppercase text-mint focus:border-mint focus:outline-none">
-            {Object.values(VENUES).map((v) => <option key={v.id} value={v.id}>{v.short === "v2" ? "v2 testnet" : "V3 preview"}</option>)}
+          <select value={onMainnet ? "mainnet" : "demo"}
+            onChange={(e) => {
+              setNetwork(e.target.value === "mainnet" ? "mainnet" : "demo");
+              window.location.reload();
+            }}
+            title="Switch network"
+            className={`border-2 px-1.5 py-1 font-mono text-[10px] font-bold uppercase focus:outline-none ${
+              onMainnet ? "border-rose bg-rose/10 text-rose" : "border-line bg-ink text-mint"
+            }`}>
+            <option value="demo">Demo · testnet</option>
+            <option value="mainnet">Mainnet · live</option>
           </select>
           {hasWallet() && (
             <button onClick={onConnect} disabled={!!connecting}
@@ -497,14 +525,26 @@ export function AppDemo() {
               {connecting ? "connecting…" : wallet ? `${shortAddr(wallet.address)}` : "Connect wallet"}
             </button>
           )}
-          {resolveInstance() ? (
+          {onMainnet ? (
             <span className="border-2 border-rose bg-rose/10 px-1.5 py-1 font-mono text-[9px] font-bold uppercase text-rose">
-              ● private mainnet · real funds
+              ● real funds
             </span>
           ) : (
             <span className="border border-amber px-1.5 py-1 font-mono text-[9px] uppercase text-amber">demo pricing</span>
           )}
         </div>
+
+        {/* live agent status + controls (mainnet, connected, enrolled) */}
+        {onMainnet && wallet && hostedSt?.enrolled && (
+          <AgentBar st={hostedSt} deriveWallet={hostedSt.derive_wallet ?? wallet.address} onChanged={refreshHosted} />
+        )}
+        {/* mainnet, connected, but this wallet isn't set up / whitelisted */}
+        {onMainnet && wallet && !connecting && hostedSt === null && (
+          <div className="mb-2 border-2 border-amber bg-pane px-3 py-2 font-mono text-[11px] text-amber">
+            No agent on this wallet. Deploy a strategy → 24/7 hosted to set one up.
+            Mainnet is whitelist-gated — if setup is blocked, your wallet isn't approved yet.
+          </div>
+        )}
 
         {/* wallet-sync progress strip */}
         {connecting && (

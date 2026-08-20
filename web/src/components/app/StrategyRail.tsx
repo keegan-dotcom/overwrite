@@ -124,7 +124,7 @@ export function StrategyRail({
             })
           )}
           <div className="px-3 pb-1.5 font-serif text-[10px] italic leading-snug text-fog">
-            Deposit at testnet.derive.xyz to put wallet assets to work.
+            Deposit on Derive to put wallet assets to work.
           </div>
         </div>
       )}
