@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { asset, strategy, Quote, DEMO_PORTFOLIO, roundStrike, ASSETS, STRATEGIES, IntentParams, Holding } from "../data/appdata";
-import { connectWallet, hasWallet, shortAddr, WalletState } from "../lib/wallet";
+import { connectWallet, shortAddr, WalletState, listProviders, WalletProvider } from "../lib/wallet";
 import { callPrice, strikeForYield, fmtUsd, fmtPct } from "../lib/options";
 import { parseIntent } from "../lib/intent";
 import { planAndValidate, describePlan } from "../lib/strategy/planner";
@@ -121,6 +121,8 @@ export function AppDemo() {
   const [wallet, setWallet] = useState<WalletState | null>(null);
   // Derive team wallets (whitelisted) — show a one-time welcome when they connect.
   const [welcomeTeam, setWelcomeTeam] = useState(false);
+  // when >1 wallet extension is installed, let the user pick which to connect.
+  const [walletPicker, setWalletPicker] = useState<WalletProvider[] | null>(null);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [gated, setGated] = useState(() => !termsAccepted());
   // your Derive testnet trading account (collateral the agent actually trades),
@@ -205,10 +207,37 @@ export function AppDemo() {
     structure(sym, pickedId ?? "income", {}, "silent");
   }, [structure, pickedId]);
 
-  const onConnect = useCallback(async () => {
+  const onConnect = useCallback(async (chosen?: WalletProvider) => {
+    // resolve which wallet to talk to. With EIP-6963 we can see every installed
+    // extension, so if there's more than one we ask instead of grabbing whichever
+    // won the window.ethereum slot (the cause of "connect does nothing" when a
+    // user runs two wallets).
+    let provider = chosen?.provider;
+    if (!provider) {
+      const found = listProviders();
+      if (found.length === 0) {
+        setMessages((m) => [...m, { role: "agent", text: "I don't see a wallet extension in this browser. Install one (MetaMask, Rabby, …), or if you have several, make sure at least one is enabled, then hit Connect again." }]);
+        return;
+      }
+      if (found.length === 1) provider = found[0].provider;
+      else { setWalletPicker(found); return; } // multiple wallets → let them choose
+    }
+    setWalletPicker(null);
     setConnecting("reading your wallet balances…");
     let w: WalletState | null = null;
-    try { w = await connectWallet(); } catch { /* user rejected */ }
+    try {
+      w = await connectWallet(provider);
+    } catch (e) {
+      // surface it instead of failing silently — a rejected prompt or a
+      // wallet-extension collision both land here.
+      const msg = String((e as Error)?.message ?? e);
+      const friendly = /reject|denied|4001/i.test(msg)
+        ? "Looks like the wallet request was dismissed — hit Connect again and approve it in your wallet."
+        : `Couldn't reach your wallet (${msg.slice(0, 120)}). If you have more than one wallet extension installed they can conflict — try disabling the extras, or pick a different wallet.`;
+      setConnecting(null);
+      setMessages((m) => [...m, { role: "agent", text: friendly }]);
+      return;
+    }
     if (!w) { setConnecting(null); return; }
 
     // your tradable assets live INSIDE your Derive testnet account as
@@ -622,6 +651,29 @@ export function AppDemo() {
           </div>
         </div>
       )}
+      {walletPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-4"
+             onClick={() => setWalletPicker(null)}>
+          <div className="w-full max-w-sm border-2 border-mint bg-pane p-5 shadow-hardsm"
+               onClick={(e) => e.stopPropagation()}>
+            <div className="mb-1 font-mono text-[11px] uppercase tracking-[0.12em] text-mint">Choose a wallet</div>
+            <p className="mb-3 text-xs text-fog">More than one wallet extension is installed. Pick the one holding the account you want to connect.</p>
+            <div className="flex flex-col gap-1.5">
+              {walletPicker.map((p) => (
+                <button key={p.uuid} onClick={() => { void onConnect(p); }}
+                  className="flex items-center gap-2.5 border-2 border-line bg-ink px-3 py-2 text-left font-mono text-[12px] uppercase text-paper transition-colors hover:border-mint hover:text-mint">
+                  {p.icon && <img src={p.icon} alt="" className="h-5 w-5" />}
+                  {p.name}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setWalletPicker(null)}
+              className="mt-3 font-mono text-[10.5px] uppercase text-fog hover:text-paper">
+              cancel
+            </button>
+          </div>
+        </div>
+      )}
       <div className="mx-auto flex h-full max-w-[1500px] flex-col">
         {/* top bar: tabs · assets · venue · wallet */}
         <div className="mb-2 flex flex-wrap items-center gap-2 border-2 border-line bg-pane px-2 py-1.5">
@@ -663,8 +715,8 @@ export function AppDemo() {
             <option value="demo">Demo · testnet</option>
             <option value="mainnet">Mainnet · live</option>
           </select>
-          {hasWallet() && (
-            <button onClick={onConnect} disabled={!!connecting}
+          {(
+            <button onClick={() => onConnect()} disabled={!!connecting}
               className={`border-2 px-2.5 py-1 font-mono text-[10.5px] uppercase transition-colors ${
                 wallet ? "border-mint text-mint" : "border-paper bg-accent font-bold text-ink shadow-hardsm"
               } disabled:opacity-70`}>

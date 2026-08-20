@@ -11,10 +11,39 @@ type Eip1193 = {
   on?: (event: string, cb: (...a: unknown[]) => void) => void;
 };
 
-const eth = (): Eip1193 | null =>
-  (window as unknown as { ethereum?: Eip1193 }).ethereum ?? null;
+/** A wallet we can connect to. EIP-6963 lets every installed extension announce
+ * itself so we never fight over the single window.ethereum slot (which breaks
+ * when a user runs more than one wallet — MetaMask + Enkrypt + Rabby, etc.). */
+export type WalletProvider = { uuid: string; name: string; icon?: string; provider: Eip1193 };
 
-export const hasWallet = (): boolean => eth() != null;
+const announced: WalletProvider[] = [];
+if (typeof window !== "undefined") {
+  window.addEventListener("eip6963:announceProvider", (e: unknown) => {
+    const d = (e as { detail?: { info?: { uuid: string; name: string; icon?: string }; provider?: Eip1193 } }).detail;
+    if (!d?.provider || !d.info) return;
+    if (!announced.some((p) => p.uuid === d.info!.uuid)) {
+      announced.push({ uuid: d.info.uuid, name: d.info.name, icon: d.info.icon, provider: d.provider });
+    }
+  });
+  try { window.dispatchEvent(new Event("eip6963:requestProvider")); } catch { /* SSR / no window */ }
+}
+
+/** Guarded read of the legacy injection — window.ethereum can be a getter-only
+ * property that THROWS on access when two wallets collide, so never touch it raw. */
+function legacyInjected(): Eip1193 | null {
+  try { return (window as unknown as { ethereum?: Eip1193 }).ethereum ?? null; } catch { return null; }
+}
+
+/** Every wallet we can see: EIP-6963 announcements (multi-wallet safe) first,
+ * with the legacy injection as a single fallback entry if none announced. */
+export function listProviders(): WalletProvider[] {
+  try { window.dispatchEvent(new Event("eip6963:requestProvider")); } catch { /* ignore */ }
+  if (announced.length) return announced.slice();
+  const inj = legacyInjected();
+  return inj ? [{ uuid: "injected", name: "Browser wallet", provider: inj }] : [];
+}
+
+export const hasWallet = (): boolean => announced.length > 0 || legacyInjected() != null;
 
 // Ethereum mainnet ERC-20s we can map onto demo assets
 const TOKENS: { address: string; decimals: number; symbol: string }[] = [
@@ -40,8 +69,8 @@ export type WalletState = {
   usdc: number;          // cash collateral (wheel / cash-secured strategies)
 };
 
-export async function connectWallet(): Promise<WalletState | null> {
-  const provider = eth();
+export async function connectWallet(chosen?: Eip1193): Promise<WalletState | null> {
+  const provider = chosen ?? listProviders()[0]?.provider ?? legacyInjected();
   if (!provider) return null;
   const accounts = (await provider.request({ method: "eth_requestAccounts" })) as string[];
   const address = accounts?.[0];
