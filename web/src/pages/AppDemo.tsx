@@ -119,6 +119,8 @@ export function AppDemo() {
   const [defaultsNote, setDefaultsNote] = useState<string | null>(null);
   const [venueMode, setVenueMode] = useState<VenueMode>("v2");
   const [wallet, setWallet] = useState<WalletState | null>(null);
+  // Derive team wallets (whitelisted) — show a one-time welcome when they connect.
+  const [welcomeTeam, setWelcomeTeam] = useState(false);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [gated, setGated] = useState(() => !termsAccepted());
   // your Derive testnet trading account (collateral the agent actually trades),
@@ -232,6 +234,15 @@ export function AppDemo() {
     setConnecting("structuring suggested trades for your portfolio…");
     setDeriveAcct(acct);
     setWallet(w);
+    // Derive team welcome (whitelisted wallets) — purely cosmetic; wrapped so a
+    // bad match can never interrupt the connect flow.
+    try {
+      const team = [
+        "0x8ca2c6d79dbc78ceca382136be590ea63eb28b89",
+        "0x9251d5835f4a68d1e3603735b43409941c244343",
+      ];
+      if (w && team.includes(w.address.toLowerCase())) setWelcomeTeam(true);
+    } catch { /* never let a cosmetic check break connect */ }
     const tradable = acct ? acct.holdings : w.holdings;
     const owned = tradable.filter((h) => h.qty > 0);
     const seen = owned.map((h) => `${h.qty.toLocaleString()} ${h.symbol}`).join(", ");
@@ -592,6 +603,25 @@ export function AppDemo() {
 
   return (
     <main className="bg-ink px-3 pb-3 pt-16 lg:h-screen lg:overflow-hidden">
+      {welcomeTeam && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/70 p-4"
+             onClick={() => setWelcomeTeam(false)}>
+          <div className="max-w-md border-2 border-mint bg-pane p-6 text-center shadow-hardsm"
+               onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 font-mono text-[11px] uppercase tracking-[0.12em] text-mint">Overwrite × Derive</div>
+            <h2 className="mb-2 text-2xl font-bold text-paper">Welcome, Derive team</h2>
+            <p className="mb-4 text-sm text-fog">
+              Your wallet is whitelisted on the V2 mainnet pilot. Describe a goal in plain
+              English and the agent structures a coherence-checked options trade on your
+              books — deploy to dry-run, then flip it live with an owner-signed message.
+            </p>
+            <button onClick={() => setWelcomeTeam(false)}
+              className="border-2 border-paper bg-accent px-4 py-1.5 font-mono text-[11px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px">
+              Let’s go
+            </button>
+          </div>
+        </div>
+      )}
       <div className="mx-auto flex h-full max-w-[1500px] flex-col">
         {/* top bar: tabs · assets · venue · wallet */}
         <div className="mb-2 flex flex-wrap items-center gap-2 border-2 border-line bg-pane px-2 py-1.5">
