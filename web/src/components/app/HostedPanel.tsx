@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { registerSessionKey } from "../../lib/deriveApi";
-import { HostedStatus, hostedActivate, hostedEnroll, hostedStatus, hostedSetLive } from "../../lib/hosted";
+import { HostedStatus, hostedActivate, hostedEnroll, hostedStatus, hostedSetLive, hostedPause } from "../../lib/hosted";
 import { resolveInstance } from "../../lib/instance";
 
 /**
@@ -77,6 +77,10 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
   };
 
   const active = st?.enrolled && st.status === "active";
+  // killed lives in its own column; the fleet skips killed tenants entirely, so
+  // "LIVE (real orders)" must never show while killed — it isn't trading.
+  const killed = (st as { kill?: boolean } | null)?.kill === true;
+  const liveNow = !!st?.config?.live && !killed;
 
   return (
     <div className="border-2 border-mint bg-pane">
@@ -163,15 +167,22 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
           <div className="flex flex-wrap items-center gap-2 border-2 border-rose bg-ink px-3 py-2.5">
             <div className="min-w-0 flex-1 font-mono text-[11px] uppercase tracking-[0.08em]">
               agent trading:{" "}
-              <span className={st?.config?.live ? "font-bold text-mint" : "text-amber"}>
-                {st?.config?.live ? "● LIVE (real orders)" : "○ paused (dry-run)"}
+              <span className={liveNow ? "font-bold text-mint" : killed ? "text-rose" : "text-amber"}>
+                {liveNow ? "● LIVE (real orders)" : killed ? "● paused (killed)" : "○ paused (dry-run)"}
               </span>
             </div>
             <button
               onClick={async () => {
                 setErr(""); setBusy(true);
                 try {
-                  const next = !(st?.config?.live);
+                  // killed is a hard stop; un-kill first (fleet ignores a killed
+                  // tenant, so "go live" while killed would be a no-op).
+                  if (killed) {
+                    await hostedPause(deriveWallet, ownerEoa, false);
+                    await refresh(deriveWallet);
+                    return;
+                  }
+                  const next = !liveNow;
                   if (next && !window.confirm(
                     "Go LIVE with real funds on Derive mainnet?\n\nThe agent will place real orders on its next 15-minute cycle. You can pause anytime.")) {
                     return;
@@ -183,11 +194,11 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
               }}
               disabled={busy}
               className={`border-2 px-3 py-1.5 font-mono text-[11.5px] font-bold uppercase shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px disabled:opacity-60 ${
-                st?.config?.live
+                liveNow
                   ? "border-paper bg-amber text-ink"
                   : "border-paper bg-accent text-ink"
               }`}>
-              {busy ? "…" : st?.config?.live ? "Pause agent" : "Go live →"}
+              {busy ? "…" : killed ? "Un-kill" : liveNow ? "Pause agent" : "Go live →"}
             </button>
           </div>
         )}

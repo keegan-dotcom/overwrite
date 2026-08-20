@@ -53,15 +53,19 @@ Deno.serve(async (req) => {
   if ("kill" in patch) update.kill = patch.kill;
   if ("plan" in patch) {
     // a newly-set plan ALWAYS starts dry-run; the owner reviews dry-run cycles
-    // and flips live separately. Fresh DCA cadence marks, too.
+    // and flips live separately. Fresh DCA cadence marks, too. A fresh deploy is
+    // an intentional restart, so it also CLEARS any prior kill — otherwise the
+    // agent bar stays stuck on "un-kill" with no go-live control after a
+    // kill→redeploy. (kill lives in its own column, not config.)
     update.config = { ...cfg, plan: patch.plan, live: false, leg_last_run: {} };
+    update.kill = false;
   }
   await db.from("tenants").update(update).eq("id", t.id);
 
   return json({
     ok: true,
     live: "plan" in patch ? false : ("live" in patch ? patch.live : (cfg.live ?? false)),
-    kill: "kill" in patch ? patch.kill : t.kill,
+    kill: "kill" in patch ? patch.kill : ("plan" in patch ? false : t.kill),
     plan_set: "plan" in patch,
   });
 });
