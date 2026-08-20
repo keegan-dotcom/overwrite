@@ -9,7 +9,9 @@
 export type Instance = { fn: string; key: string; label: string };
 
 const LS = "overwrite_instance";
-const PRIVATE_FN = "https://xceljobykjsslgnurogp.supabase.co/functions/v1";
+// private mainnet instance runs in the EU (eu-central-1) so order placement
+// originates from a non-US IP, per Derive's guidance for this account
+const PRIVATE_FN = "https://dpfsvupqssfzwsnhpdmg.supabase.co/functions/v1";
 
 export function resolveInstance(): Instance | null {
   try {
