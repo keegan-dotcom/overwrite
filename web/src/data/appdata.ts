@@ -291,7 +291,7 @@ export const STRATEGIES: Strategy[] = [
     tagline: "Floor paid for by a ceiling. Near-zero cost.",
     fitsWhen: "Protect a big position without paying for insurance.",
     risk: "conservative", quote: collarQuote },
-  { id: "bear", name: "Smart Short", emoji: "📉", proName: "put spread",
+  { id: "bear", name: "Smart Short", emoji: "📉", proName: "bear put spread",
     tagline: "Bet on a fall with strictly capped risk. No liquidations.",
     fitsWhen: "You think it drops but won't risk a short squeeze.",
     risk: "spicy", quote: bearQuote },

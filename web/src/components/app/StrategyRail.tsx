@@ -53,7 +53,10 @@ export function StrategyRail({
                 <span className={`block truncate font-mono text-[11.5px] font-bold uppercase tracking-[0.04em] ${picked ? "text-mint" : "text-paper"}`}>
                   {s.name}
                 </span>
-                <span className="block truncate font-mono text-[10px] text-fog">{stat}</span>
+                {/* the real options name - sophisticated traders identify by this */}
+                <span className="block truncate font-mono text-[10px] text-fog">
+                  {s.proName} · {stat}
+                </span>
               </span>
               <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${RISK_DOT[s.risk]}`} title={s.risk} />
             </button>
