@@ -20,7 +20,7 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
   const [err, setErr] = useState("");
 
   const refresh = async (w: string) => {
-    if (/^0x[0-9a-fA-F]{40}$/.test(w)) setSt(await hostedStatus(w));
+    if (/^0x[0-9a-fA-F]{40}$/.test(w)) setSt(await hostedStatus(w, ownerEoa));
   };
   useEffect(() => { void refresh(deriveWallet); /* eslint-disable-next-line */ }, []);
 

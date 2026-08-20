@@ -2,30 +2,56 @@
  * plus LIVE venue data (positions, open orders, collateral) when the tenant
  * is active - the server holds the trading-scoped session key, so the web
  * Console can show the real account without any client-side signing.
- * Public read-only by design (testnet pilot). */
+ *
+ * Testnet: public read-only by design (fake money).
+ * MAINNET: real-money positions are NOT public. A read must carry an owner
+ * wallet signature (personal_sign of a canonical, timestamped message). The
+ * server recovers the signer and returns data ONLY if the signer is the
+ * account owner (tenant.owner_eoa). One signature is reused client-side for
+ * a freshness window, so polling doesn't re-prompt. */
 import { CORS, json, sb, decryptPk, authHeaders, rpc, ENV } from "../_shared/derive.ts";
+import { recoverMessageAddress } from "npm:viem@2";
+
+const READ_WINDOW_MS = 30 * 60_000; // signature freshness
+
+// canonical read-auth message - MUST match the client (lib/hosted.ts) exactly
+const readMessage = (owner: string, ts: number) =>
+  `Overwrite mainnet read\nowner: ${owner}\nts: ${ts}`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
-  // MAINNET: real-money positions are not public. Reads require the console
-  // key from the deny-all fleet_config table (x-console-key header or ?key=).
-  // Testnet stays open by design (documented on /security).
-  if (ENV === "prod") {
-    const { data: ck } = await sb().from("fleet_config")
-      .select("value").eq("key", "console_key").single();
-    const supplied = req.headers.get("x-console-key")
-      ?? new URL(req.url).searchParams.get("key") ?? "";
-    if (!ck?.value || supplied !== ck.value) return json({ error: "forbidden" }, 403);
-  }
   const url = new URL(req.url);
-  let wallet = url.searchParams.get("wallet") ?? "";
-  if (!wallet && req.method === "POST") {
-    try { wallet = (await req.json())?.derive_wallet ?? ""; } catch { /* noop */ }
-  }
+  // parse the body once (POST is the only path the app uses on mainnet)
+  let body: any = {};
+  if (req.method === "POST") { try { body = await req.json(); } catch { /* noop */ } }
+  let wallet = url.searchParams.get("wallet") ?? body?.derive_wallet ?? "";
   if (!/^0x[0-9a-fA-F]{40}$/.test(wallet)) return json({ error: "invalid wallet" }, 400);
+
+  // MAINNET read-gate: recover the signer from the read-auth signature and
+  // require it to equal this account's owner. Verified against the resolved
+  // tenant below (a valid signature for wallet A cannot read wallet B).
+  let readOwner = "";
+  if (ENV === "prod") {
+    const ts = Number(body?.read_ts ?? 0);
+    const sig = String(body?.read_sig ?? "");
+    const owner = String(body?.owner ?? "");
+    if (!/^0x[0-9a-fA-F]{40}$/.test(owner) || !/^0x[0-9a-fA-F]+$/.test(sig)) {
+      return json({ error: "read_auth_required" }, 401);
+    }
+    if (!Number.isFinite(ts) || Math.abs(Date.now() - ts) > READ_WINDOW_MS) {
+      return json({ error: "read_auth_expired" }, 401);
+    }
+    try {
+      const rec = await recoverMessageAddress({
+        message: readMessage(owner, ts), signature: sig as `0x${string}`,
+      });
+      if (rec.toLowerCase() !== owner.toLowerCase()) return json({ error: "bad_read_signature" }, 401);
+    } catch { return json({ error: "bad_read_signature" }, 401); }
+    readOwner = owner.toLowerCase();
+  }
   const db = sb();
   // accept either the Derive wallet or the owner EOA (what the site connects)
-  const sel = "id,derive_wallet,status,subaccount_id,session_key_address,session_key_enc,config,last_cycle_at,last_error,kill,created_at";
+  const sel = "id,derive_wallet,owner_eoa,status,subaccount_id,session_key_address,session_key_enc,config,last_cycle_at,last_error,kill,created_at";
   let { data: t } = await db.from("tenants").select(sel)
     .ilike("derive_wallet", wallet).maybeSingle();
   if (!t) {
@@ -36,6 +62,11 @@ Deno.serve(async (req) => {
     t = (rows ?? []).find((r) => r.status === "active") ?? (rows ?? [])[0] ?? null;
   }
   if (!t) return json({ enrolled: false });
+  // MAINNET: the verified signer must own this tenant, else reveal nothing
+  // (a valid read-auth for your own wallet can't read anyone else's).
+  if (ENV === "prod" && String(t.owner_eoa ?? "").toLowerCase() !== readOwner) {
+    return json({ enrolled: false });
+  }
   wallet = t.derive_wallet; // auth headers must use the Derive wallet
   const { data: ledger } = await db.from("ledger")
     .select("ts,kind,instrument,usd").eq("tenant_id", t.id)
@@ -90,7 +121,7 @@ Deno.serve(async (req) => {
 
   const { session_key_enc: _drop, id: _drop2, ...pub } = t as Record<string, unknown>;
   return json({
-    enrolled: true, ...pub, premium_recent: premium, ledger, cycles,
+    enrolled: true, env: ENV, ...pub, premium_recent: premium, ledger, cycles,
     positions, open_orders, collaterals, equity_usd,
   });
 });

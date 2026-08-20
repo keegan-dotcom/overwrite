@@ -29,7 +29,7 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
     if (!/^0x[0-9a-fA-F]{40}$/.test(addr)) return;
     setLoading(true);
     try {
-      const s = await hostedStatus(addr);
+      const s = await hostedStatus(addr, ownerEoa ?? undefined);
       setSt(s);
       setFetchedAt(new Date());
       if (s.enrolled && s.derive_wallet) {
@@ -38,7 +38,7 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
       }
     } catch { /* endpoint hiccup - keep last view */ }
     finally { setLoading(false); }
-  }, []);
+  }, [ownerEoa]);
 
   useEffect(() => {
     if (!lookup) return;

@@ -6,11 +6,13 @@
  *                 server-side by an allowlist, so a non-whitelisted wallet can
  *                 select it and browse but can't set up or trade.
  *
- * Reads are public (mainnet status by wallet address — only whitelisted
- * wallets have any data). Trading is gated by the allowlist at enrollment,
- * and go-live/pause/kill require a wallet signature from the account owner.
- * (Pilot tradeoff: positions are readable by address; a wallet-signature
- * read gate is the pre-scale hardening step.)
+ * Mainnet reads are owner-gated: the status endpoint returns an account's
+ * positions only to a request carrying a valid wallet signature from that
+ * account's owner (signed once, reused within a freshness window). Trading is
+ * gated by the allowlist at enrollment, and go-live/pause/kill require a
+ * wallet signature from the account owner. Testnet reads stay public (fake
+ * money). So a non-whitelisted wallet can select mainnet and browse the UI
+ * but can neither read anyone's positions, enroll, nor trade.
  */
 export type Network = "demo" | "mainnet";
 export type Instance = { fn: string; key: string; label: string };

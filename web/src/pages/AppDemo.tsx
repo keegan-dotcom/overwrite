@@ -209,7 +209,7 @@ export function AppDemo() {
     setConnecting(onMainnet ? "checking your Derive mainnet account…" : "checking your Derive testnet account…");
     let acct: { sub: number | null; holdings: Holding[]; usdc: number } | null = null;
     try {
-      const st = await hostedStatus(w.address);
+      const st = await hostedStatus(w.address, w.address);
       setHostedSt(st.enrolled ? st : null);
       if (st.enrolled && (st.collaterals?.length ?? 0) > 0) {
         const round4 = (x: number) => Math.round(x * 10_000) / 10_000;
@@ -270,7 +270,7 @@ export function AppDemo() {
   const refreshHosted = useCallback(async () => {
     if (!wallet) return;
     try {
-      const st = await hostedStatus(wallet.address);
+      const st = await hostedStatus(wallet.address, wallet.address);
       setHostedSt(st.enrolled ? st : null);
     } catch { /* endpoint hiccup - keep last view */ }
   }, [wallet]);
