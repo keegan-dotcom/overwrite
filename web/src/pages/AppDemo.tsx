@@ -10,7 +10,7 @@ import { TestnetPanel } from "../components/app/TestnetPanel";
 import { HostedPanel } from "../components/app/HostedPanel";
 import { Console } from "../components/app/Console";
 import { TermsGate, termsAccepted } from "../components/app/TermsGate";
-import { hostedStatus, HostedStatus, hostedDeployPlan } from "../lib/hosted";
+import { hostedStatus, HostedStatus, hostedDeployPlan, hostedSetLive, hostedPause, strategyLabel } from "../lib/hosted";
 import { resolveInstance, getNetwork, setNetwork } from "../lib/instance";
 import { AgentBar } from "../components/app/AgentBar";
 import { VENUES, VenueMode } from "../data/venues";
@@ -392,6 +392,48 @@ export function AppDemo() {
         return;
       }
 
+      // context-aware control commands on mainnet — the chat knows what's live
+      // and can pause / go-live / kill / restart / report, all owner-signed.
+      if (onMainnet && hostedSt?.enrolled && wallet) {
+        let dw = hostedSt.derive_wallet ?? "";
+        if (!dw) { try { dw = localStorage.getItem("overwrite_derive_wallet") ?? ""; } catch { /* noop */ } }
+        const owner = wallet.address;
+        const live = hostedSt.config?.live === true;
+        const killed = (hostedSt as { kill?: boolean }).kill === true;
+        const runLabel = (hostedSt.config?.plan as { label?: string } | undefined)?.label ?? strategyLabel(hostedSt.config);
+        const cmd = text.toLowerCase();
+        const control = async (verb: string, fn: () => Promise<unknown>, msg: string) => {
+          setThinking(false);
+          try { await fn(); setMessages((m) => [...m, { role: "agent", text: msg }]); await refreshHosted(); }
+          catch (e) { setMessages((m) => [...m, { role: "agent", text: `Couldn't ${verb}: ${String((e as Error).message ?? e)}` }]); }
+        };
+        if (/\b(what'?s? (running|live|going on)|current (strategy|position|trade)|^status\b|what am i (running|trading))\b/.test(cmd)) {
+          setThinking(false);
+          const orders = (hostedSt.open_orders ?? []).map((o) => `${o.direction.toUpperCase()} ${o.amount} ${o.instrument} @ ${o.price}`).join(", ");
+          const pos = (hostedSt.positions ?? []).map((p) => `${p.amount} ${p.instrument}`).join(", ");
+          const state = killed ? "killed (paused)" : live ? "LIVE — trading real funds" : "dry-run (logging, not trading)";
+          setMessages((m) => [...m, { role: "agent", text: `Running now: ${runLabel} · ${state}.${orders ? ` Resting: ${orders}.` : ""}${pos ? ` Positions: ${pos}.` : ""}${!orders && !pos ? " No resting order yet — it quotes on the next 15-minute cycle." : ""} Say "pause", "go live", "kill", or ask for a different strategy to change it.` }]);
+          return;
+        }
+        if (/\b(kill( it| the agent| everything)?|shut (it )?down|emergency stop)\b/.test(cmd) && !/un-?kill/.test(cmd)) {
+          await control("kill", () => hostedPause(dw, owner, true), "Killed — the agent stops immediately and places no more orders. Your positions are untouched. Say \"restart\" to bring it back.");
+          return;
+        }
+        if (/\b(un-?kill|restart|bring it back|resume the agent)\b/.test(cmd)) {
+          await control("restart", () => hostedPause(dw, owner, false), "Restarted — the agent's back to dry-run. Say \"go live\" when you want it trading.");
+          return;
+        }
+        if (/\b(pause|stop trading|halt|go to dry|dry.?run)\b/.test(cmd) && !/kill/.test(cmd)) {
+          await control("pause", () => hostedSetLive(dw, owner, false), "Paused — back to dry-run. It logs what it would do but places nothing. Say \"go live\" to resume.");
+          return;
+        }
+        if (/\b(go live|turn (it )?on|start trading|make it live|resume trading)\b/.test(cmd)) {
+          if (!window.confirm("Go LIVE with real funds on Derive mainnet? The agent will place real orders on its next cycle.")) { setThinking(false); return; }
+          await control("go live", () => hostedSetLive(dw, owner, true), "Live — the agent will place real orders on its next 15-minute cycle. Say \"pause\" anytime.");
+          return;
+        }
+      }
+
       // LLM seat first (real intent understanding when ANTHROPIC_API_KEY is set)
       const llm = await fetchLlmIntent(text, lastIntent.current);
       if (llm) {
@@ -421,7 +463,7 @@ export function AppDemo() {
       setThinking(false);
       applyIntent({ symbol: p.symbol, strategyId: p.strategyId, params: p.params, understood: p.understood });
     })();
-  }, [structure, applyIntent]);
+  }, [structure, applyIntent, onMainnet, hostedSt, wallet, refreshHosted]);
 
   // deploy the last coherent chat plan to the hosted mainnet agent (dry-run)
   const deployPlan = useCallback(async () => {
@@ -430,6 +472,13 @@ export function AppDemo() {
     if (!dw) { try { dw = localStorage.getItem("overwrite_derive_wallet") ?? ""; } catch { /* noop */ } }
     if (!/^0x[0-9a-fA-F]{40}$/.test(dw)) {
       setMessages((m) => [...m, { role: "agent", text: "Set up your mainnet agent first (connect + enroll), then I can deploy this plan to it." }]);
+      return;
+    }
+    // if a strategy is already running, deploying REPLACES it — say so first
+    const existing = (hostedSt?.config?.plan as { label?: string } | undefined)?.label
+      ?? (hostedSt?.enrolled && hostedSt?.status === "active" ? strategyLabel(hostedSt?.config) : "");
+    if (existing && !window.confirm(
+      `This replaces your current strategy (${existing}) with "${pendingPlan.label}" and starts it in dry-run — your existing resting orders get cancelled. Only one strategy runs per account. Continue?`)) {
       return;
     }
     setDeploying(true);

@@ -1,48 +1,66 @@
 /**
- * Live spot/index prices from Derive's public API. The app shipped with
- * hardcoded demo prices in appdata.ts; that's fine for a static preview but
- * WRONG the moment the agent suggests real trades ("dip to $3,600" when ETH is
- * $2,300"). This fetches the real index price per asset and patches ASSETS in
- * place, so every downstream consumer (planner strikes, chat copy, the header
- * chip, Black-Scholes previews) uses the real number.
+ * Live spot + IV from Derive, patched into ASSETS in place so every downstream
+ * consumer (planner strikes, chat copy, header chip, Black-Scholes previews)
+ * uses REAL numbers — never the baked demo prices.
  *
- * Reads are public and not geo-blocked (only order placement is), so this works
- * from any browser. Falls back to the baked demo price if a fetch fails.
+ * Primary source is our backend proxy (overwrite-prices), which fetches Derive
+ * server-side: zero CORS risk, and it carries IV too. If the proxy is somehow
+ * unreachable, we fall back to a direct browser call to Derive's public API
+ * (works because reads aren't geo-blocked). Only if BOTH fail do the demo
+ * numbers remain — and that path is logged.
  */
 import { ASSETS } from "../data/appdata";
 
+const PROXY = "https://dpfsvupqssfzwsnhpdmg.supabase.co/functions/v1/overwrite-prices";
 const DERIVE_PUBLIC = "https://api.lyra.finance/public/get_ticker";
-
-// assets with a live Derive perp we can read an index price from
 const LIVE_SYMBOLS = ["BTC", "ETH", "HYPE"];
 
-async function fetchIndex(symbol: string): Promise<number | null> {
-  try {
-    const r = await fetch(DERIVE_PUBLIC, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ instrument_name: `${symbol}-PERP` }),
-    });
-    if (!r.ok) return null;
-    const j = await r.json();
-    const px = Number(j?.result?.index_price ?? j?.index_price);
-    return Number.isFinite(px) && px > 0 ? px : null;
-  } catch {
-    return null;
-  }
+function patch(sym: string, spot: number, iv?: number | null) {
+  const a = ASSETS.find((x) => x.symbol === sym);
+  if (!a || !(spot > 0)) return false;
+  a.spot = spot;
+  if (iv != null && iv > 0) a.iv = iv;
+  return true;
 }
 
-/** Fetch live index prices and patch ASSETS[].spot in place. Returns the map of
- * symbols that were refreshed → their live price. Safe to call repeatedly. */
+async function fromProxy(): Promise<string[]> {
+  const r = await fetch(PROXY, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+  if (!r.ok) throw new Error(`proxy ${r.status}`);
+  const j = await r.json();
+  const got: string[] = [];
+  for (const [sym, v] of Object.entries((j?.assets ?? {}) as Record<string, { spot: number; iv?: number }>)) {
+    if (patch(sym, Number(v.spot), v.iv)) got.push(sym);
+  }
+  return got;
+}
+
+async function fromDeriveDirect(sym: string): Promise<boolean> {
+  try {
+    const r = await fetch(DERIVE_PUBLIC, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ instrument_name: `${sym}-PERP` }),
+    });
+    if (!r.ok) return false;
+    const j = await r.json();
+    return patch(sym, Number(j?.result?.index_price ?? j?.index_price));
+  } catch { return false; }
+}
+
+/** Refresh live prices/IV into ASSETS. Returns the symbols refreshed. Safe to
+ * call repeatedly (on mount + on an interval). */
 export async function refreshLivePrices(): Promise<Record<string, number>> {
   const updated: Record<string, number> = {};
-  await Promise.all(
-    LIVE_SYMBOLS.map(async (sym) => {
-      const px = await fetchIndex(sym);
-      if (px == null) return;
-      const a = ASSETS.find((x) => x.symbol === sym);
-      if (a) { a.spot = px; updated[sym] = px; }
-    }),
-  );
+  let symbols: string[] = [];
+  try {
+    symbols = await fromProxy();
+  } catch {
+    // proxy down — direct fallback per symbol
+    const results = await Promise.all(LIVE_SYMBOLS.map(fromDeriveDirect));
+    symbols = LIVE_SYMBOLS.filter((_, i) => results[i]);
+  }
+  for (const sym of symbols) {
+    const a = ASSETS.find((x) => x.symbol === sym);
+    if (a) updated[sym] = a.spot;
+  }
   return updated;
 }
