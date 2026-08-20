@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { registerSessionKey } from "../../lib/deriveApi";
-import { HostedStatus, hostedActivate, hostedEnroll, hostedStatus } from "../../lib/hosted";
+import { HostedStatus, hostedActivate, hostedEnroll, hostedStatus, hostedSetLive } from "../../lib/hosted";
 import { resolveInstance } from "../../lib/instance";
 
 /**
@@ -151,6 +151,40 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
                 or sign here (needs gas ETH on Derive Chain)
               </button>
             </div>
+          </div>
+        )}
+
+        {/* owner control: flip the agent live / pause it (private instance) */}
+        {priv && active && (
+          <div className="flex flex-wrap items-center gap-2 border-2 border-rose bg-ink px-3 py-2.5">
+            <div className="min-w-0 flex-1 font-mono text-[11px] uppercase tracking-[0.08em]">
+              agent trading:{" "}
+              <span className={st?.config?.live ? "font-bold text-mint" : "text-amber"}>
+                {st?.config?.live ? "● LIVE (real orders)" : "○ paused (dry-run)"}
+              </span>
+            </div>
+            <button
+              onClick={async () => {
+                setErr(""); setBusy(true);
+                try {
+                  const next = !(st?.config?.live);
+                  if (next && !window.confirm(
+                    "Go LIVE with real funds on Derive mainnet?\n\nThe agent will place real orders on its next 15-minute cycle. You can pause anytime.")) {
+                    return;
+                  }
+                  await hostedSetLive(deriveWallet, next);
+                  await refresh(deriveWallet);
+                } catch (e2) { setErr(String((e2 as Error).message ?? e2)); }
+                finally { setBusy(false); }
+              }}
+              disabled={busy}
+              className={`border-2 px-3 py-1.5 font-mono text-[11.5px] font-bold uppercase shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px disabled:opacity-60 ${
+                st?.config?.live
+                  ? "border-paper bg-amber text-ink"
+                  : "border-paper bg-accent text-ink"
+              }`}>
+              {busy ? "…" : st?.config?.live ? "Pause agent" : "Go live →"}
+            </button>
           </div>
         )}
 

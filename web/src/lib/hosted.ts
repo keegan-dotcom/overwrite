@@ -40,6 +40,7 @@ export type HostedStatus = {
   enrolled: boolean;
   derive_wallet?: string;
   status?: "awaiting_registration" | "active" | "paused" | "error";
+  config?: { live?: boolean; symbol?: string; [k: string]: unknown };
   subaccount_id?: number;
   session_key_address?: string;
   premium_recent?: number;
@@ -62,3 +63,10 @@ export const hostedActivate = (deriveWallet: string) =>
 
 export const hostedStatus = (deriveWallet: string): Promise<HostedStatus> =>
   post("overwrite-status", { derive_wallet: deriveWallet });
+
+/** Owner-only (private instance): flip the agent's live flag or pause it.
+ * The server just sets the flag; the fleet cron does any trading itself. */
+export const hostedSetLive = (deriveWallet: string, live: boolean) =>
+  post("overwrite-control", { derive_wallet: deriveWallet, live });
+export const hostedPause = (deriveWallet: string, kill: boolean) =>
+  post("overwrite-control", { derive_wallet: deriveWallet, kill });
