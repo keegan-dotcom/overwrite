@@ -237,9 +237,16 @@ export function AppDemo() {
     return q;
   }, [currentAcct]);
 
-  // the page opens composed: default strategy on the default asset
+  // the page opens composed: default strategy on the default asset. MOUNT ONLY —
+  // `structure` changes identity when the account context updates (every hosted
+  // poll), and we must NOT recompose (that would reset the desk to BTC/income and
+  // wipe whatever the user is reviewing). eslint-disable is intentional.
+  const composedOnce = useRef(false);
   useEffect(() => {
+    if (composedOnce.current) return;
+    composedOnce.current = true;
     structure("BTC", "income", {}, "silent");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [structure]);
 
   const onSelectAsset = useCallback((sym: string) => {
@@ -626,7 +633,12 @@ export function AppDemo() {
     ]);
 
     const leg = ticket.legs[0];
-    pushFeed("action", `deploy: ${leg.side === "short" ? "SELL" : "BUY"} ${ticket.assetSymbol} ${fmtUsd(leg.strike)} ${leg.kind.toUpperCase()} ×${(leg.qty * qty).toLocaleString()} → post-only at mark`);
+    if (leg) {
+      pushFeed("action", `deploy: ${leg.side === "short" ? "SELL" : "BUY"} ${ticket.assetSymbol} ${fmtUsd(leg.strike)} ${leg.kind.toUpperCase()} ×${(leg.qty * qty).toLocaleString()} → post-only at mark`);
+    } else {
+      // perp / linear leg — no option legs to describe
+      pushFeed("action", `deploy: ${ticket.assetQty >= 0 ? "LONG" : "SHORT"} ${Math.abs(ticket.assetQty)}× ${ticket.assetSymbol} perp → market`);
+    }
     later(2200, () => pushFeed("info", `filled · ${ticket.incomeMonthly >= 0 ? "premium banked" : "cost paid"}: ${fmtUsd(Math.abs(ticket.incomeMonthly * qty), 0)}`));
     VENUES[venueMode].settleStages.forEach((stage, i) =>
       later(3200 + i * 1100, () => pushFeed("info", stage)));
