@@ -513,7 +513,36 @@ export function AppDemo() {
           const orders = (hostedSt.open_orders ?? []).map((o) => `${o.direction.toUpperCase()} ${o.amount} ${o.instrument} @ ${o.price}`).join(", ");
           const pos = (hostedSt.positions ?? []).map((p) => `${p.amount} ${p.instrument}`).join(", ");
           const state = killed ? "killed (paused)" : live ? "LIVE — trading real funds" : "dry-run (logging, not trading)";
-          setMessages((m) => [...m, { role: "agent", text: `Running now: ${runLabel} · ${state}.${orders ? ` Resting: ${orders}.` : ""}${pos ? ` Positions: ${pos}.` : ""}${!orders && !pos ? " No resting order yet — it quotes on the next 15-minute cycle." : ""} Say "pause", "go live", "kill", or ask for a different strategy to change it.` }]);
+          const cfgAny = hostedSt.config as { defend_proximity_pct?: number; plan?: { manage?: { defendProximityPct?: number } } } | undefined;
+          const dfd = cfgAny?.defend_proximity_pct ?? cfgAny?.plan?.manage?.defendProximityPct;
+          const dfdNote = typeof dfd === "number" && dfd > 0
+            ? ` Strike defense is ON — it rolls the strike away when price comes within ${Math.round(dfd * 100)}%.`
+            : "";
+          setMessages((m) => [...m, { role: "agent", text: `Running now: ${runLabel} · ${state}.${orders ? ` Resting: ${orders}.` : ""}${pos ? ` Positions: ${pos}.` : ""}${!orders && !pos ? " No resting order yet — it quotes on the next 15-minute cycle." : ""}${dfdNote} Say "pause", "go live", "kill", or ask for a different strategy to change it.` }]);
+          return;
+        }
+        // arm / disarm strike defense on the RUNNING agent — no strategy rebuild.
+        // Re-pushes the same plan with manage.defendProximityPct set (or cleared),
+        // then flips live back on if it was live (deploy always lands dry-run).
+        const planObj = hostedSt.config?.plan as ({ manage?: { defendProximityPct?: number } } & Record<string, unknown>) | undefined;
+        const disarmRe = /\b(?:turn off|disable|stop|remove|cancel)\s+(?:the\s+)?(?:strike\s+)?defen[cs]e\b|\bstop defending\b/;
+        const armRe = /\bdefend (?:my |the )?strike\b|\b(?:turn on|enable|arm)\s+(?:the\s+)?(?:strike\s+)?defen[cs]e\b/;
+        if (planObj && typeof planObj === "object" && (disarmRe.test(cmd) || armRe.test(cmd))) {
+          const disarm = disarmRe.test(cmd);
+          const pctM = cmd.match(/(\d+(?:\.\d+)?)\s*%/);
+          const pct = disarm ? 0 : Math.min(0.25, Math.max(0.01, pctM ? parseFloat(pctM[1]) / 100 : 0.05));
+          const nextPlan = JSON.parse(JSON.stringify(planObj)) as { manage?: { defendProximityPct?: number } };
+          if (disarm) {
+            if (nextPlan.manage) { delete nextPlan.manage.defendProximityPct; if (!Object.keys(nextPlan.manage).length) delete nextPlan.manage; }
+          } else {
+            nextPlan.manage = { ...(nextPlan.manage ?? {}), defendProximityPct: pct };
+          }
+          await control(disarm ? "disarm defense" : "arm defense", async () => {
+            await hostedDeployPlan(dw, owner, nextPlan);
+            if (live) await hostedSetLive(dw, owner, true); // keep it trading — deploy alone lands dry-run
+          }, disarm
+            ? `Strike defense OFF. The agent keeps its take-profit and gamma-zone rolls, but no longer rolls the strike away as price approaches.${live ? "" : " (Agent is paused — say \"go live\" to trade.)"}`
+            : `Strike defense ON at ${Math.round(pct * 100)}%. From the next cycle: if price comes within ${Math.round(pct * 100)}% of your short strike, the agent buys it back and re-sells further out — over and over, until you kill it.${live ? "" : " (Agent is paused — say \"go live\" to trade.)"}`);
           return;
         }
         if (/\b(kill( it| the agent| everything)?|shut (it )?down|emergency stop)\b/.test(cmd) && !/un-?kill/.test(cmd)) {

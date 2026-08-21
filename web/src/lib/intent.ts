@@ -54,7 +54,11 @@ function detectStrategy(text: string): string {
   // ---- direct directional buys (the "just buy me calls" path) --------------
   // a buy-ish verb + the word calls/puts, unless it's clearly a premium-SELL.
   const buyish = has("buy", "long", "get", "want", "grab", "give me", "load up", "ape", "pick up", "purchase", "spend", "put ", "into");
-  const sellish = has("covered call", "sell call", "sell a call", "write call", "sell my call", "sell put", "sell a put", "cash secured", "cash-secured", "wheel");
+  // premium-SELLING signals: any "sell … calls/puts" phrasing (incl. "sell ETH
+  // calls"), or calls/puts mentioned in an income/premium context.
+  const sellish = has("covered call", "sell call", "sell a call", "write call", "sell my call", "sell put", "sell a put", "cash secured", "cash-secured", "wheel")
+    || /sell\s+(?:\w+\s+)?(?:calls?|puts?)/.test(text)
+    || (/\bcalls?\b|\bputs?\b/.test(text) && has("for income", "income", "premium", "yield", "earn"));
   if (buyish && !sellish && /\bcalls?\b/.test(text) && !/\bputs?\b/.test(text)) return "call";
   if (buyish && !sellish && /\bputs?\b/.test(text)) return "put";
   if (has("neutral", "no view", "no direction", "without betting", "not betting", "don't care which way", "dont care which way", "either way", "hedge the delta", "delta hedge", "just the yield", "pure income", "pure yield"))
@@ -98,6 +102,12 @@ export function parseIntent(text: string): ParsedIntent {
     const idx = t.indexOf(m);
     const around = t.slice(Math.max(0, idx - 30), idx + m.length + 12);
     const val = parseFloat(m) / 100;
+    // "within 5%" / "5% of the strike" is a strike-defense PROXIMITY, not a
+    // yield target or stop — leave it for the defend parser below.
+    if (/within\s*$/.test(t.slice(Math.max(0, idx - 12), idx)) ||
+        /^\s*(?:of|from|away)/.test(t.slice(idx + m.length, idx + m.length + 8))) {
+      continue;
+    }
     if (/down|drop|fall|lose|loss|stop|bail|exit|close/.test(around) &&
         !/yield|apy|income|earn/.test(around.slice(0, 30 + m.length))) {
       params.stopLossPct = val;
@@ -135,7 +145,7 @@ export function parseIntent(text: string): ParsedIntent {
 
   // dollar buy-size for direct option buys: "$100 of", "spend $100", "$100 worth"
   // (kept distinct from a "$120 strike" price, which is capTarget above).
-  const sizeM = t.match(/(?:spend|buy|put|use)\s*\$?\s?([\d,.]+\s?[km]?)\s*(?:of|worth|into|on)|\$?\s?([\d,.]+\s?[km]?)\s*(?:worth|of)\s+(?:call|put|option|lotto)/);
+  const sizeM = t.match(/(?:spend|buy|put|use)\s*(?:me\s+)?\$?\s?([\d,.]+\s?[km]?)\s*(?:of|worth|into|on)|\$?\s?([\d,.]+\s?[km]?)\s*(?:worth|of)\s+(?:\w+\s+)?(?:calls?|puts?|options?|lotto)/);
   if (sizeM) {
     const raw = sizeM[1] ?? sizeM[2] ?? "";
     const v = parseMoney(raw);

@@ -53,6 +53,7 @@ export type Quote = {
   capPrice: number | null; // upside capped past this price
   floorPrice: number | null; // protected below this price
   stopLossPct: number | null;
+  defended?: boolean;      // strike defense armed — the cap/strike auto-rolls away
   headline: string;        // the one-line outcome
   tradeoffs: string[];     // plain-english full disclosure
   managed: string[];       // what the agent does automatically
@@ -104,9 +105,14 @@ function incomeQuote(a: Asset, o: Partial<IntentParams> = {}): Quote {
     assetQty: 1, dte: p.dte,
     incomeMonthly: prem, incomeAnnualPct: yld, capPrice: k, floorPrice: null,
     stopLossPct: p.stopLossPct,
-    headline: `Earn ~${fmtPct(yld, 1)}/yr in income. You keep every dollar of upside until ${fmtUsd(k)}.`,
+    defended: !!p.defendProximityPct,
+    headline: p.defendProximityPct
+      ? `Earn ~${fmtPct(yld, 1)}/yr in income. The cap starts at ${fmtUsd(k)} and auto-rolls HIGHER as ${a.symbol} climbs — your upside window moves with the market.`
+      : `Earn ~${fmtPct(yld, 1)}/yr in income. You keep every dollar of upside until ${fmtUsd(k)}.`,
     tradeoffs: [
-      `Above ${fmtUsd(k)} at expiry, gains are capped - you keep the climb to ${fmtUsd(k)} plus the premium, and give up anything beyond.`,
+      p.defendProximityPct
+        ? `The cap at ${fmtUsd(k)} is DEFENDED: within ${fmtPct(p.defendProximityPct, 0)} of it, the agent buys the call back and re-sells higher. Each roll spends some premium, so income runs a bit lower in exchange for keeping the upside.`
+        : `Above ${fmtUsd(k)} at expiry, gains are capped - you keep the climb to ${fmtUsd(k)} plus the premium, and give up anything beyond.`,
       `Downside is NOT protected: if ${a.symbol} falls, you still hold it. The premium (~${fmtUsd(prem, 2)}/unit per cycle) softens the fall slightly.`,
       p.stopLossPct ? `Auto-close: the whole position unwinds if it's down ${fmtPct(p.stopLossPct, 0)} from entry.` : "No stop-loss set - add one in chat ('close if down 15%').",
       "Income is real premium collected each ~monthly cycle; it is not a guaranteed APY.",
@@ -115,7 +121,9 @@ function incomeQuote(a: Asset, o: Partial<IntentParams> = {}): Quote {
       "Re-sells a new call each cycle at your target",
       "Takes profit early at 75% premium decay",
       "Rolls at 21 days to expiry (gamma zone)",
-      "If breached: rolls up only for a net credit, never a debit",
+      ...(p.defendProximityPct
+        ? [`Strike defense ON: rolls up + out when ${a.symbol} is within ${fmtPct(p.defendProximityPct, 0)} of the strike — repeats until you kill it`]
+        : ["If breached: rolls up only for a net credit, never a debit"]),
     ],
   };
 }
@@ -144,6 +152,9 @@ function wheelQuote(a: Asset, o: Partial<IntentParams> = {}): Quote {
       "Re-sells a put each cycle while unassigned",
       "On assignment: switches to covered calls automatically",
       "Take-profit and 21-DTE roll rules apply on every leg",
+      ...(p.defendProximityPct
+        ? [`Strike defense ON: rolls the put down + out when ${a.symbol} falls within ${fmtPct(p.defendProximityPct, 0)} of the strike — dodges assignment, keeps the income going`]
+        : []),
     ],
   };
 }

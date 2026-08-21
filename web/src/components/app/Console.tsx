@@ -243,8 +243,15 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
       </div>
 
       <p className="px-1 font-serif text-[13px] italic text-fog">
-        Derive {net} · live read via the fleet's key · revoke any time at
-        {net === "mainnet" ? "app.derive.xyz" : "testnet.derive.xyz"} → Developers
+        Derive {net} · live read via the fleet's key · revoke any time on the{" "}
+        <a
+          href={`https://${net === "mainnet" ? "app.derive.xyz" : "testnet.derive.xyz"}/developers`}
+          target="_blank" rel="noreferrer"
+          className="not-italic underline decoration-1 underline-offset-2 hover:text-paper"
+        >
+          {net === "mainnet" ? "app.derive.xyz" : "testnet.derive.xyz"}/developers
+        </a>{" "}
+        page
       </p>
     </div>
   );

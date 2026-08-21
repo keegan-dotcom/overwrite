@@ -29,6 +29,9 @@ export function TuneCard({ plan, onChange }: { plan: StrategyPlan; onChange: (p:
   const optLeg = plan.legs.find((l) => l.venue === "option" && l.option);
   const contractsLeg = plan.legs.find((l) => l.sizing.kind === "contracts");
   const pctLeg = plan.legs.find((l) => l.sizing.kind === "pct_of_collateral" || l.sizing.kind === "cash_secured");
+  // strike defense only applies where there's a short option to roll
+  const shortOptLeg = plan.legs.find((l) => l.venue === "option" && l.side === "sell");
+  const defendPct = plan.manage?.defendProximityPct ?? null;
 
   const sizePct = pctLeg?.sizing.kind === "pct_of_collateral" ? pctLeg.sizing.pct
     : pctLeg?.sizing.kind === "cash_secured" ? (pctLeg.sizing.pct ?? 100) : null;
@@ -81,6 +84,9 @@ export function TuneCard({ plan, onChange }: { plan: StrategyPlan; onChange: (p:
       ];
       if (isSell) lines.push({ k: "Yield", v: `~${fmtPct(annualYield(prem, spot, dteMid), 1)}/yr on notional` });
       else lines.push({ k: "Max loss", v: `${fmtUsd(total, 0)} (the premium you pay)` });
+      if (isSell && defendPct != null) {
+        lines.push({ k: "Defense", v: `auto-rolls ${isCall ? "up" : "down"} within ${Math.round(defendPct * 100)}% of strike` });
+      }
       return { kind: "opt" as const, lines };
     }
     return null;
@@ -101,6 +107,12 @@ export function TuneCard({ plan, onChange }: { plan: StrategyPlan; onChange: (p:
   };
   const setMaxNotional = (v: number | null) => { const p = clone(); if (v && v > 0) p.constraints.maxNotionalUsd = v; else delete p.constraints.maxNotionalUsd; onChange(p); };
   const setMinYield = (pct: number | null) => { const p = clone(); if (pct && pct > 0) p.objective.targetYieldAnnual = pct / 100; else delete p.objective.targetYieldAnnual; onChange(p); };
+  const setDefend = (pct: number | null) => {
+    const p = clone();
+    if (pct != null && pct > 0) p.manage = { ...(p.manage ?? {}), defendProximityPct: pct };
+    else if (p.manage) { delete p.manage.defendProximityPct; if (!Object.keys(p.manage).length) delete p.manage; }
+    onChange(p);
+  };
 
   const Row = ({ label, children }: { label: string; children: ReactNode }) => (
     <div className="flex items-center gap-3 py-1.5">
@@ -115,6 +127,7 @@ export function TuneCard({ plan, onChange }: { plan: StrategyPlan; onChange: (p:
         sizePct != null ? `${sizePct}%${cashSecured ? " cash" : ` of ${sym}`}` : contracts != null ? `${contracts} contract${contracts === 1 ? "" : "s"}` : null,
         delta != null ? `${delta.toFixed(2)}Δ` : absStrike != null ? fmtUsd(absStrike) : null,
         dteMid != null ? `~${dteMid}d` : null,
+        defendPct != null ? `defend ${Math.round(defendPct * 100)}%` : null,
       ].filter(Boolean).join(" · ");
 
   return (
@@ -194,6 +207,33 @@ export function TuneCard({ plan, onChange }: { plan: StrategyPlan; onChange: (p:
                     }`}>{d}d</button>
                 ))}
               </div>
+            </Row>
+          )}
+
+          {/* STRIKE DEFENSE — roll the short strike away as price approaches */}
+          {shortOptLeg && (
+            <Row label="Defend">
+              <button
+                onClick={() => setDefend(defendPct != null ? null : 0.05)}
+                className={`shrink-0 border px-2 py-0.5 font-mono text-[13px] uppercase transition-colors ${
+                  defendPct != null ? "border-mint text-mint" : "border-line text-fog hover:text-paper"
+                }`}
+              >
+                {defendPct != null ? "on" : "off"}
+              </button>
+              {defendPct != null ? (
+                <>
+                  <input type="range" min={2} max={15} step={1} value={Math.round(defendPct * 100)}
+                    onChange={(e) => setDefend(Number(e.target.value) / 100)} className="flex-1 accent-mint" />
+                  <span className="w-44 shrink-0 text-right font-mono text-[13px] text-paper">
+                    within {Math.round(defendPct * 100)}% <span className="text-fog">· rolls {shortOptLeg.option?.type === "P" ? "down" : "up"} + out</span>
+                  </span>
+                </>
+              ) : (
+                <span className="font-mono text-[13px] text-fog">
+                  auto-roll the strike {shortOptLeg.option?.type === "P" ? "lower" : "higher"} as price approaches — keeps your upside uncapped
+                </span>
+              )}
             </Row>
           )}
 

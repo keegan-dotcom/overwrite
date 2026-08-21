@@ -74,7 +74,7 @@ export function PayoffChart({ q }: { q: Quote }) {
       <path d={path} fill="none" stroke="#3DFFA8" strokeWidth="2.5" />
       {/* markers */}
       {marker(a.spot, "now", "#E9F2EC", true)}
-      {q.capPrice != null && marker(q.capPrice, "cap", "#FFB84D")}
+      {q.capPrice != null && marker(q.capPrice, q.defended ? "cap · auto-rolls ↑" : "cap", "#FFB84D")}
       {q.floorPrice != null && marker(q.floorPrice, "floor", "#3DFFA8", true, 1)}
       {holdPath && (
         <text x={W - PAD - 4} y={H - PAD - 6} textAnchor="end" fill="#8FA89C" fontSize="10" fontFamily="'Courier Prime', monospace">
