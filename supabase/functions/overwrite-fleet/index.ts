@@ -20,6 +20,7 @@ import {
 import { validatePlan, type StrategyPlan, type Leg, type Capabilities } from "../_shared/strategy.ts";
 import {
   chooseOption, resolveAmount, coverageCap, priceLeg, dcaDue,
+  manageDecision, optionDteDays,
   type OptCand, type AccountView,
 } from "../_shared/plan_exec.ts";
 import { privateKeyToAccount } from "npm:viem@2/accounts";
@@ -43,8 +44,14 @@ Deno.serve(async (req) => {
   const expected = cfgRow?.value ?? "";
   const got = req.headers.get("x-fleet-secret") ?? "";
   if (!expected || !timingSafeEq(got, expected)) return json({ error: "forbidden" }, 403);
-  const { data: tenants } = await db.from("tenants")
-    .select("*").eq("status", "active").eq("kill", false).limit(20);
+  // optional single-tenant run (fire-on-go-live): the control plane calls this
+  // with {only_wallet} right after an owner signs live, so the first cycle is
+  // instant. No body (the cron) → run all active tenants, exactly as before.
+  let onlyWallet = "";
+  try { onlyWallet = String(((await req.json()) ?? {}).only_wallet ?? "").trim(); } catch { /* cron: no body */ }
+  let q = db.from("tenants").select("*").eq("status", "active").eq("kill", false);
+  q = /^0x[0-9a-fA-F]{40}$/.test(onlyWallet) ? q.ilike("derive_wallet", onlyWallet) : q.limit(20);
+  const { data: tenants } = await q;
   const results: Record<string, string> = {};
   for (const t of tenants ?? []) {
     try {
@@ -64,8 +71,197 @@ Deno.serve(async (req) => {
   return json({ ran: (tenants ?? []).length, env: ENV, results });
 });
 
+/** Reconcile real fills into the ledger: every agent-labelled trade since the
+ * last sync becomes a premium_in (short sale credit) / buyback_out (debit) /
+ * sweep_fill row, so "premium collected" reflects REAL fills. Runs for both the
+ * legacy covered-call path AND the structured IR-plan path. */
+async function syncTrades(db: any, t: any, hdrs: Record<string, string>, subId: number): Promise<string[]> {
+  const notes: string[] = [];
+  try {
+    const trades = await rpc("private/get_trade_history",
+      { subaccount_id: subId, from_timestamp: Number(t.last_trade_sync_ms ?? 0) + 1 }, hdrs);
+    for (const tr of trades?.trades ?? []) {
+      if (String(tr.label ?? "") !== LABEL) continue;
+      const usd = Number(tr.trade_amount ?? tr.amount ?? 0) * Number(tr.trade_price ?? tr.price ?? 0);
+      const isOpt = String(tr.instrument_name ?? "").split("-").length >= 4;
+      await db.from("ledger").insert({
+        tenant_id: t.id,
+        kind: isOpt ? (tr.direction === "sell" ? "premium_in" : "buyback_out") : "sweep_fill",
+        instrument: tr.instrument_name,
+        usd: tr.direction === "sell" ? usd : -usd,
+        detail: { trade_id: tr.trade_id ?? null },
+      });
+      notes.push(`${isOpt ? (tr.direction === "sell" ? "premium" : "buyback") : "sweep fill"} $${Math.abs(usd).toFixed(0)}`);
+    }
+    await db.from("tenants").update({ last_trade_sync_ms: Date.now() }).eq("id", t.id);
+  } catch { notes.push("trade-sync skipped"); }
+  return notes;
+}
+
+/** Close-only mode: cancel resting orders, then flatten every open OPTION
+ * position with a reduce-only marketable order (buy back shorts / sell out
+ * longs), capped so we never get gouged. When the book is flat, clear the
+ * unwind flag and pause (live:false). Owner-initiated — the unwind control
+ * action authorized these closes. */
+async function unwindPositions(db: any, t: any, cfg: any): Promise<string> {
+  const pk = await decryptPk(t.session_key_enc);
+  const hdrs = await authHeaders(pk, t.derive_wallet);
+  const subId = Number(t.subaccount_id);
+  const account = privateKeyToAccount(pk);
+
+  try { await rpc("private/cancel_by_label", { subaccount_id: subId, label: LABEL }, hdrs); } catch { /* noop */ }
+
+  const sub = await rpc("private/get_subaccount", { subaccount_id: subId }, hdrs);
+  const positions = (sub?.positions ?? []).filter((p: any) =>
+    String(p.instrument_name ?? "").split("-").length >= 4 && Number(p.amount ?? 0) !== 0);
+
+  if (!positions.length) {
+    // flat — clear unwind and pause; reconcile any final fills for the ledger
+    await db.from("tenants").update({ config: { ...cfg, unwind: false, live: false } }).eq("id", t.id);
+    const synced = await syncTrades(db, t, hdrs, subId);
+    return `UNWIND complete — flat, no open options. Agent paused.${synced.length ? " · " + synced.join(" · ") : ""}`;
+  }
+
+  const notes: string[] = [];
+  for (const p of positions) {
+    const amt = Number(p.amount);
+    const closeBuy = amt < 0;            // short → buy to close; long → sell to close
+    const size = Math.abs(amt);
+    try {
+      const inst = await rpc("public/get_instrument", { instrument_name: p.instrument_name }, {});
+      const tick = await rpc("public/get_ticker", { instrument_name: p.instrument_name }, {});
+      const mark = Number(tick.mark_price) || 0;
+      const bid = Number(tick.best_bid_price) || 0;
+      const ask = Number(tick.best_ask_price) || 0;
+      const tickSz = String(inst.tick_size ?? "0.1");
+      const dp = (tickSz.split(".")[1] ?? "").length;
+      // marketable close price with a gouge cap: pay up to mark*1.25 to buy back,
+      // accept down to mark*0.75 to sell out. Outside that, wait a cycle.
+      let px: number;
+      if (closeBuy) {
+        if (!(ask > 0) || (mark > 0 && ask > mark * 1.25)) {
+          notes.push(`${p.instrument_name}: ask ${ask || "—"} vs mark ${mark.toFixed(2)} — waiting`); continue;
+        }
+        px = ask;
+      } else {
+        if (!(bid > 0) || (mark > 0 && bid < mark * 0.75)) {
+          notes.push(`${p.instrument_name}: bid ${bid || "—"} vs mark ${mark.toFixed(2)} — waiting`); continue;
+        }
+        px = bid;
+      }
+      const price = px.toFixed(dp);
+      const amountStr = quantize(size, inst.amount_step ?? "0.1");
+      if (Number(amountStr) <= 0) { notes.push(`${p.instrument_name}: size below step`); continue; }
+      const nonce = actionNonce();
+      const expiry = Math.floor(Date.now() / 1000) + 3600;
+      const signature = await account.sign({
+        hash: typedHash({
+          subaccountId: subId, nonce,
+          moduleDataEncoded: encodeTrade({
+            assetAddress: inst.base_asset_address, subId: BigInt(inst.base_asset_sub_id ?? 0),
+            limitPrice: price, amount: amountStr, maxFee: "1000", recipientId: subId, isBid: closeBuy,
+          }),
+          signatureExpirySec: expiry, owner: t.derive_wallet, signer: account.address,
+        }),
+      });
+      await rpc("private/order", {
+        instrument_name: p.instrument_name, direction: closeBuy ? "buy" : "sell",
+        order_type: "limit", time_in_force: "ioc", amount: amountStr, limit_price: price,
+        max_fee: "1000", subaccount_id: subId, nonce: "__nonce__", signature,
+        signature_expiry_sec: expiry, signer: account.address, mmp: false,
+        reduce_only: true, label: LABEL,
+      }, hdrs, nonce);
+      notes.push(`close ${closeBuy ? "BUY" : "SELL"} ${amountStr} ${p.instrument_name} @ ${price}`);
+    } catch (e) {
+      notes.push(`${p.instrument_name}: close ERR ${String(e).slice(0, 80)}`);
+    }
+  }
+  const synced = await syncTrades(db, t, hdrs, subId);
+  return `UNWINDING (${positions.length} open) — ${notes.join(" · ")}${synced.length ? " · " + synced.join(" · ") : ""}`;
+}
+
+/** Active management: for each SHORT option position, take profit once the
+ * premium has decayed enough, or roll it out of the gamma zone. Buys back
+ * reduce-only at a gouge-capped marketable price (never chases a runaway ask).
+ * The next cycle's re-quote opens the fresh replacement. Only runs live; the
+ * roll threshold is disabled when the strategy intentionally trades shorter
+ * than it (so a short-dated plan can't churn-close its own fresh sells). */
+async function managePositions(
+  db: any, t: any, hdrs: Record<string, string>, subId: number,
+  pk: `0x${string}`, positions: any[], tp: number, rollDte: number,
+): Promise<string[]> {
+  if (!(tp > 0) && !(rollDte > 0)) return [];
+  const account = privateKeyToAccount(pk);
+  const nowMs = Date.now();
+  const notes: string[] = [];
+  const shorts = (positions ?? []).filter((p: any) =>
+    String(p.instrument_name ?? "").split("-").length >= 4 && Number(p.amount) < 0);
+  for (const p of shorts) {
+    const name = String(p.instrument_name);
+    try {
+      const tick = await rpc("public/get_ticker", { instrument_name: name }, {});
+      const mark = Number(tick.mark_price) || Number(p.mark_price) || 0;
+      const ask = Number(tick.best_ask_price) || 0;
+      const dec = manageDecision({
+        amount: Number(p.amount),
+        entry: Number(p.average_price ?? 0),
+        mark,
+        dteDays: optionDteDays(name, nowMs),
+        takeProfitPct: tp > 0 ? tp : undefined,
+        rollDte: rollDte > 0 ? rollDte : undefined,
+      });
+      if (!dec.close) continue;
+      // gouge cap: pay up to mark*1.25 to buy back; otherwise wait a cycle.
+      if (!(ask > 0) || (mark > 0 && ask > mark * 1.25)) {
+        notes.push(`${name}: ${dec.reason} but ask ${ask || "—"} vs mark ${mark.toFixed(2)} — waiting`);
+        continue;
+      }
+      const inst = await rpc("public/get_instrument", { instrument_name: name }, {});
+      const tickSz = String(inst.tick_size ?? "0.1");
+      const dp = (tickSz.split(".")[1] ?? "").length;
+      const price = ask.toFixed(dp);
+      const amountStr = quantize(Math.abs(Number(p.amount)), inst.amount_step ?? "0.1");
+      if (Number(amountStr) <= 0) continue;
+      const nonce = actionNonce();
+      const expiry = Math.floor(nowMs / 1000) + 3600;
+      const signature = await account.sign({
+        hash: typedHash({
+          subaccountId: subId, nonce,
+          moduleDataEncoded: encodeTrade({
+            assetAddress: inst.base_asset_address, subId: BigInt(inst.base_asset_sub_id ?? 0),
+            limitPrice: price, amount: amountStr, maxFee: "1000", recipientId: subId, isBid: true,
+          }),
+          signatureExpirySec: expiry, owner: t.derive_wallet, signer: account.address,
+        }),
+      });
+      await rpc("private/order", {
+        instrument_name: name, direction: "buy", order_type: "limit", time_in_force: "ioc",
+        amount: amountStr, limit_price: price, max_fee: "1000", subaccount_id: subId,
+        nonce: "__nonce__", signature, signature_expiry_sec: expiry, signer: account.address,
+        mmp: false, reduce_only: true, label: LABEL,
+      }, hdrs, nonce);
+      await db.from("ledger").insert({
+        tenant_id: t.id, kind: "buyback_out", instrument: name,
+        usd: -(Number(price) * Number(amountStr)),
+        detail: { reason: dec.reason, price, amount: amountStr },
+      });
+      notes.push(`${dec.reason}: bought back ${amountStr} ${name} @ ${price}`);
+    } catch (e) {
+      notes.push(`${name}: manage ERR ${String(e).slice(0, 60)}`);
+    }
+  }
+  return notes;
+}
+
 async function cycle(db: any, t: any): Promise<string> {
   const cfg = t.config ?? {};
+  // UNWIND (close-only) takes priority over everything: the owner asked to be
+  // flat, so we cancel resting orders and buy back / sell out every open option
+  // position (reduce-only) until the book is empty, then auto-pause. Distinct
+  // from kill (just stop) — kill leaves positions ON.
+  if (cfg.unwind === true) {
+    return await unwindPositions(db, t, cfg);
+  }
   // NEW: if this tenant runs a structured IR plan, execute that and return.
   // Otherwise fall through to the untouched legacy covered-call path.
   if (cfg.plan && typeof cfg.plan === "object") {
@@ -89,24 +285,16 @@ async function cycle(db: any, t: any): Promise<string> {
     String(p.instrument_name ?? "").endsWith("-C") && Number(p.amount) < 0);
   const shortCalls = positions.reduce((a: number, p: any) => a + Math.abs(Number(p.amount)), 0);
 
-  try {
-    const trades = await rpc("private/get_trade_history",
-      { subaccount_id: subId, from_timestamp: Number(t.last_trade_sync_ms ?? 0) + 1 }, hdrs);
-    for (const tr of trades?.trades ?? []) {
-      if (String(tr.label ?? "") !== LABEL) continue;
-      const usd = Number(tr.trade_amount ?? tr.amount ?? 0) * Number(tr.trade_price ?? tr.price ?? 0);
-      const isOpt = String(tr.instrument_name ?? "").split("-").length >= 4;
-      await db.from("ledger").insert({
-        tenant_id: t.id,
-        kind: isOpt ? (tr.direction === "sell" ? "premium_in" : "buyback_out") : "sweep_fill",
-        instrument: tr.instrument_name,
-        usd: tr.direction === "sell" ? usd : -usd,
-        detail: { trade_id: tr.trade_id ?? null },
-      });
-      notes.push(`${isOpt ? (tr.direction === "sell" ? "premium" : "buyback") : "sweep fill"} $${Math.abs(usd).toFixed(0)}`);
-    }
-    await db.from("tenants").update({ last_trade_sync_ms: Date.now() }).eq("id", t.id);
-  } catch { notes.push("trade-sync skipped"); }
+  notes.push(...await syncTrades(db, t, hdrs, subId));
+
+  // active management: take-profit / roll the short calls before re-quoting.
+  if (isLive(cfg)) {
+    const tp = Number(cfg.take_profit_pct ?? 0.75);
+    let rollDte = Number(cfg.roll_dte ?? 21);
+    if (rollDte >= Number(cfg.dte_min ?? 25)) rollDte = 0;
+    try { notes.push(...await managePositions(db, t, hdrs, subId, pk, sub?.positions ?? [], tp, rollDte)); }
+    catch (e) { notes.push(`manage skipped: ${String(e).slice(0, 60)}`); }
+  }
 
   const { count: ordersToday } = await db.from("ledger")
     .select("id", { count: "exact", head: true })
@@ -540,6 +728,18 @@ async function runPlan(db: any, t: any, cfg: any): Promise<string> {
   try { await rpc("private/cancel_by_label", { subaccount_id: subId, label: LABEL }, hdrs); } catch { /* noop */ }
 
   const notes: string[] = [];
+  // active management first: take-profit / roll existing shorts before we
+  // re-quote. The closed position frees coverage; the fresh sell re-opens on
+  // the next cycle once the buy-back has confirmed.
+  if (isLive(cfg)) {
+    const optDteMins = plan.legs.filter((l) => l.venue === "option" && l.option).map((l) => l.option!.expiry.dteMin);
+    const planDteMin = optDteMins.length ? Math.min(...optDteMins) : 999;
+    const tp = Number(cfg.take_profit_pct ?? 0.75);
+    let rollDte = Number(cfg.roll_dte ?? 21);
+    if (rollDte >= planDteMin) rollDte = 0; // plan intentionally trades shorter than the roll → don't churn
+    try { notes.push(...await managePositions(db, t, hdrs, subId, pk, positions, tp, rollDte)); }
+    catch (e) { notes.push(`manage skipped: ${String(e).slice(0, 60)}`); }
+  }
   const firedRecurring: string[] = [];
   for (const leg of plan.legs) {
     // recurring (DCA) legs skip until due; maker legs re-quote every cycle
@@ -560,6 +760,10 @@ async function runPlan(db: any, t: any, cfg: any): Promise<string> {
     for (const id of firedRecurring) next[id] = Date.now();
     await db.from("tenants").update({ config: { ...cfg, leg_last_run: next } }).eq("id", t.id);
   }
+
+  // reconcile fills (this run + any prior) so "premium collected" reflects REAL
+  // credits, not just placed quotes — same fix the legacy path already had.
+  notes.push(...await syncTrades(db, t, hdrs, subId));
 
   const mode = isLive(cfg) ? "" : "DRY ";
   return `${mode}${plan.label} · ${notes.join(" · ")}`;

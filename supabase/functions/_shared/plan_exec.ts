@@ -128,3 +128,40 @@ export function priceLeg(p: PriceInputs): { px: number; tif: "post_only" | "ioc"
 export function dcaDue(everyDays: number, lastRunMs: number, nowMs: number): boolean {
   return nowMs - lastRunMs >= everyDays * 86400_000;
 }
+
+/** Days-to-expiry parsed from a Derive option instrument name
+ * (e.g. "ETH-20260828-2500-C" → the 20260828 segment, expiring 08:00 UTC).
+ * Returns NaN if the name isn't a dated option. Pure. */
+export function optionDteDays(instrument: string, nowMs: number): number {
+  const seg = instrument.split("-")[1] ?? "";
+  if (!/^\d{8}$/.test(seg)) return NaN;
+  const y = Number(seg.slice(0, 4)), mo = Number(seg.slice(4, 6)), da = Number(seg.slice(6, 8));
+  const expMs = Date.UTC(y, mo - 1, da, 8, 0, 0);
+  return (expMs - nowMs) / 86400_000;
+}
+
+export interface ManageInputs {
+  amount: number;          // signed position size (SHORT = negative)
+  entry: number;           // average entry price (the credit received per contract)
+  mark: number;            // current mark price
+  dteDays: number;         // days to expiry
+  takeProfitPct?: number;  // e.g. 0.75 → close once 75% of the premium has decayed
+  rollDte?: number;        // e.g. 21 → close (to roll) once inside 21 DTE
+}
+/** Decide whether to close a short option position this cycle. ONLY manages
+ * shorts (a long has nothing to take-profit here). Take-profit fires when the
+ * mark has decayed to (1 − tp) of the entry credit — locking the win early.
+ * Roll fires inside the gamma zone (rollDte), so the near-dated short is bought
+ * back and the plan re-sells a fresh, further-dated one next. Pure + testable. */
+export function manageDecision(p: ManageInputs): { close: boolean; reason: string } {
+  if (!(p.amount < 0)) return { close: false, reason: "" };
+  const tp = p.takeProfitPct;
+  if (tp && tp > 0 && p.entry > 0 && p.mark <= p.entry * (1 - tp)) {
+    return { close: true, reason: `take-profit ${Math.round(tp * 100)}%` };
+  }
+  const roll = p.rollDte;
+  if (roll && roll > 0 && Number.isFinite(p.dteDays) && p.dteDays <= roll) {
+    return { close: true, reason: `roll @ ${roll}d (${p.dteDays.toFixed(1)}d left)` };
+  }
+  return { close: false, reason: "" };
+}

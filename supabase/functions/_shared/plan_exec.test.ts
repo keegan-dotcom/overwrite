@@ -4,6 +4,7 @@
  */
 import {
   chooseOption, resolveAmount, coverageCap, priceLeg, dcaDue, callDeltaBS,
+  manageDecision, optionDteDays,
   type OptCand,
 } from "./plan_exec.ts";
 import type { Leg, StrategyPlan } from "./strategy.ts";
@@ -93,6 +94,25 @@ check("coverageCap fully short → 0", coverageCap(4, 3.6, 0.9) === 0);
 const now = 1_800_000_000_000;
 check("DCA due after 8d (cadence 7)", dcaDue(7, now - 8 * 86400_000, now));
 check("DCA not due after 3d (cadence 7)", !dcaDue(7, now - 3 * 86400_000, now));
+
+// ---- optionDteDays --------------------------------------------------------
+{
+  const nowMs = Date.UTC(2026, 7, 21, 8, 0, 0); // 2026-08-21 08:00 UTC
+  check("dte parses ETH-20260828-2500-C → ~7d", Math.abs(optionDteDays("ETH-20260828-2500-C", nowMs) - 7) < 0.01);
+  check("dte of a past expiry is negative", optionDteDays("ETH-20260820-2500-C", nowMs) < 0);
+  check("non-option name → NaN", Number.isNaN(optionDteDays("ETH-PERP", nowMs)));
+}
+
+// ---- manageDecision -------------------------------------------------------
+{
+  // short sold at 10; tp 0.75 → close once mark ≤ 2.5
+  check("TP fires when premium decayed 75%", manageDecision({ amount: -1, entry: 10, mark: 2.4, dteDays: 30, takeProfitPct: 0.75, rollDte: 21 }).close);
+  check("TP holds while still rich", !manageDecision({ amount: -1, entry: 10, mark: 5, dteDays: 30, takeProfitPct: 0.75, rollDte: 21 }).close);
+  check("roll fires inside 21 DTE", manageDecision({ amount: -1, entry: 10, mark: 9, dteDays: 18, takeProfitPct: 0.75, rollDte: 21 }).close);
+  check("roll holds outside 21 DTE", !manageDecision({ amount: -1, entry: 10, mark: 9, dteDays: 30, takeProfitPct: 0.75, rollDte: 21 }).close);
+  check("never manages a LONG", !manageDecision({ amount: 1, entry: 10, mark: 1, dteDays: 5, takeProfitPct: 0.75, rollDte: 21 }).close);
+  check("no rules set → never closes", !manageDecision({ amount: -1, entry: 10, mark: 0.1, dteDays: 1 }).close);
+}
 
 // ---- callDeltaBS sanity ---------------------------------------------------
 check("ATM call delta ≈ 0.5", Math.abs(callDeltaBS(4000, 4000, 0.6, 0.08) - 0.5) < 0.08);

@@ -124,7 +124,15 @@ function describe(cfg: Cfg): { title: string; summary: string; rows: Row[]; flag
   const ty = plan?.objective?.targetYieldAnnual;
   if (ty) rows.push({ k: "Target income", v: `~${(ty * 100).toFixed(0)}%/yr in premium (not a guaranteed APY)` });
   if (cfg.min_yield != null) rows.push({ k: "Min yield floor", v: `skips any option paying under ${(cfg.min_yield * 100).toFixed(0)}%/yr` });
-  if (cfg.take_profit_pct != null) rows.push({ k: "Take-profit", v: `buys the option back once ${(cfg.take_profit_pct * 100).toFixed(0)}% of the premium has decayed — locks the win in early` });
+  // active management (now enforced by the executor) — surface it for any
+  // short-option strategy so people know the agent tends the position.
+  if (shortCall || shortPut) {
+    const tpPct = typeof cfg.take_profit_pct === "number" ? cfg.take_profit_pct : 0.75;
+    rows.push({ k: "Take-profit", v: `buys it back automatically once ${Math.round(tpPct * 100)}% of the premium has decayed — locks the win in early` });
+    const roll = typeof cfg.roll_dte === "number" ? cfg.roll_dte : 21;
+    const shortDteMin = (shortCall ?? shortPut)?.option?.expiry?.dteMin ?? 0;
+    if (shortDteMin > roll) rows.push({ k: "Auto-roll", v: `rolls out of the gamma zone at ~${roll} days to expiry, re-selling further out` });
+  }
   if (cfg.sweep?.buy) rows.push({ k: "Premium sweep", v: `auto-buys ${String(cfg.sweep.buy).toUpperCase()} with collected premium` });
   const maxLoss = plan?.constraints?.maxLossUsd;
   rows.push({ k: "Max-loss cap", v: maxLoss != null ? `$${maxLoss.toLocaleString()} hard stop` : "none set" });
