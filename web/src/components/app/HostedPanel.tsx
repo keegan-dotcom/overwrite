@@ -52,25 +52,27 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
   const checkActivation = async () => {
     setErr(""); setPollMsg(""); setBusy(true);
     const ATTEMPTS = 18, GAP = 5000;
+    let lastDetail = "";
     try {
       for (let i = 0; i < ATTEMPTS; i++) {
         setPollMsg(`Checking Derive for your key… (${i + 1}/${ATTEMPTS}) — this can take up to a minute after you register.`);
-        const a = await hostedActivate(deriveWallet);
-        if (a.status === "active") {
+        const a = await hostedActivate(deriveWallet) as { status?: string; reason?: string; detail?: string };
+        if (a.status === "active") { setPollMsg(""); await refresh(deriveWallet); return; }
+        if (typeof a.detail === "string" && a.detail) lastDetail = a.detail;
+        // "no subaccount" won't resolve by waiting — Derive only creates one on
+        // first deposit — so surface it immediately and stop polling.
+        if (a.reason === "no_subaccount") {
           setPollMsg("");
-          await refresh(deriveWallet);
+          setErr(a.detail || "This Derive wallet has no subaccount yet — deposit funds on app.derive.xyz first, then activate again.");
           return;
         }
         if (i < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, GAP));
       }
-      // still not active after ~90s — give a concrete checklist, not a shrug
+      // after ~90s, show the SPECIFIC reason Derive gave (the server now returns
+      // an actionable detail), falling back to a checklist only if we got none.
       setPollMsg("");
-      setErr(
-        "Still can't see your key active on Derive after ~90s. Check that: " +
-        "(1) you registered THIS exact key address (copy it again below), " +
-        `(2) the scope was admin, (3) you registered it under the SAME Derive wallet you entered above (${deriveWallet.slice(0, 6)}…${deriveWallet.slice(-4)}), and ` +
-        "(4) the registration actually went through on Derive (no pending/failed tx). Then hit “I registered it → activate” once more.",
-      );
+      setErr(lastDetail ||
+        "Still can't see your key active on Derive after ~90s. Check that you registered THIS exact key address (copy it again below) with scope admin, under the same Derive wallet above, and the tx confirmed — then activate once more.");
     } catch (e2) {
       setPollMsg("");
       setErr(String((e2 as Error).message ?? e2));
