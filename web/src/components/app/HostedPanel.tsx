@@ -13,12 +13,21 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
   // private mainnet instance? swap venue links/copy and say REAL FUNDS
   const priv = resolveInstance();
   const venueUrl = priv ? "app.derive.xyz" : "testnet.derive.xyz";
+  // Deep links so people don't have to hunt for these pages themselves:
+  //  - session keys live on a real, linkable route (/developers)
+  //  - deposit is a button on the app root (no stable standalone route), so we
+  //    link the root and tell them where the Deposit button is.
+  const devUrl = `https://${venueUrl}/developers`;
+  const depositUrl = `https://${venueUrl}`;
   const [deriveWallet, setDeriveWallet] = useState(
     () => { try { return localStorage.getItem("overwrite_derive_wallet") ?? ""; } catch { return ""; } });
   const [st, setSt] = useState<HostedStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [pollMsg, setPollMsg] = useState("");
+  // set when Derive says the key is registered but the wallet has no funded
+  // subaccount yet — surfaces a one-click deposit link instead of a dead-end error.
+  const [needDeposit, setNeedDeposit] = useState(false);
 
   const refresh = async (w: string) => {
     if (/^0x[0-9a-fA-F]{40}$/.test(w)) setSt(await hostedStatus(w, ownerEoa));
@@ -26,7 +35,7 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
   useEffect(() => { void refresh(deriveWallet); /* eslint-disable-next-line */ }, []);
 
   const go = async () => {
-    setErr(""); setBusy(true);
+    setErr(""); setNeedDeposit(false); setBusy(true);
     try {
       if (!/^0x[0-9a-fA-F]{40}$/.test(deriveWallet)) throw new Error("enter your Derive wallet address");
       if (deriveWallet.toLowerCase() === ownerEoa.toLowerCase()) {
@@ -50,7 +59,7 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
    * key, so a single check almost always looked like "still not activated".
    * We keep checking and show live progress instead of making you click. */
   const checkActivation = async () => {
-    setErr(""); setPollMsg(""); setBusy(true);
+    setErr(""); setPollMsg(""); setNeedDeposit(false); setBusy(true);
     const ATTEMPTS = 18, GAP = 5000;
     let lastDetail = "";
     try {
@@ -63,7 +72,7 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
         // first deposit — so surface it immediately and stop polling.
         if (a.reason === "no_subaccount") {
           setPollMsg("");
-          setErr(a.detail || "This Derive wallet has no subaccount yet — deposit funds on app.derive.xyz first, then activate again.");
+          setNeedDeposit(true);
           return;
         }
         if (i < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, GAP));
@@ -148,15 +157,19 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
             they're active, since this is the #1 place people get stuck. */}
         {!active && (
           <div className="border border-line bg-ink px-3 py-2.5 font-serif text-[14.5px] leading-snug text-paper/95">
-            <span className="font-bold text-paper">New to Derive — no wallet address yet?</span>{" "}
-            You need a Derive account first (it holds the funds the agent trades).{" "}
-            <a href={`https://${venueUrl}`} target="_blank" rel="noreferrer"
+            <span className="font-bold text-paper">New to Derive — no account on the wallet you connected?</span>{" "}
+            You need a Derive account first (it holds the funds the agent trades). Two minutes:{" "}
+            <a href={depositUrl} target="_blank" rel="noreferrer"
                className="font-bold text-mint underline decoration-2 underline-offset-2">
-              Create one at {venueUrl} →
+              open {venueUrl} →
             </a>{" "}
-            (connect the same wallet you connected here, fund it, then open{" "}
-            <span className="font-mono text-[13.5px]">Developers</span> and copy your{" "}
-            <span className="font-bold">“Wallet”</span> address into the box above). Takes about two minutes.
+            connect the <span className="font-bold">same wallet</span> you connected here, hit{" "}
+            <span className="font-bold">Deposit</span> (top-right) and fund it, then open{" "}
+            <a href={devUrl} target="_blank" rel="noreferrer"
+               className="font-bold text-mint underline decoration-2 underline-offset-2">
+              Developers →
+            </a>{" "}
+            and copy your <span className="font-bold">“Wallet”</span> address into the box above.
           </div>
         )}
 
@@ -176,12 +189,12 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
             </div>
             <div className="font-serif text-[14.5px] leading-snug text-paper/95">
               <span className="font-bold text-paper">Gasless (recommended):</span>{" "}
-              open{" "}
-              <a href={`https://${venueUrl}`} target="_blank" rel="noreferrer"
+              open the{" "}
+              <a href={devUrl} target="_blank" rel="noreferrer"
                  className="text-mint underline decoration-2 underline-offset-2">
-                {venueUrl}
+                {venueUrl}/developers
               </a>{" "}
-              → Developers → <em>Register Session Key</em> → paste the address
+              page → <em>Register Session Key</em> → paste the address
               above (scope: <span className="font-bold">admin</span> — required
               to place orders; Derive has no trade-only scope; revoke anytime;
               any expiry; keep the name ≤16 characters — e.g. "Overwrite Live"
@@ -203,6 +216,37 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
                 {pollMsg}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Unfunded account: key is registered but Derive has no subaccount yet.
+            Waiting won't fix it — Derive only makes the subaccount on first
+            deposit — so drop a one-click deposit link + re-check button. */}
+        {needDeposit && (
+          <div className="space-y-2 border-2 border-amber bg-ink px-3 py-2.5">
+            <div className="font-mono text-[13px] uppercase tracking-[0.12em] text-amber">
+              Almost there — deposit needed
+            </div>
+            <div className="font-serif text-[14.5px] leading-snug text-paper/95">
+              Your key is registered, but this Derive wallet has{" "}
+              <span className="font-bold">no funds yet</span> — Derive creates
+              your trading subaccount the first time you deposit. Add assets, then
+              hit activate again.
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <a href={depositUrl} target="_blank" rel="noreferrer"
+                 className="border-2 border-paper bg-accent px-3 py-1.5 font-mono text-[13.5px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px">
+                Deposit on {venueUrl} →
+              </a>
+              <button onClick={checkActivation} disabled={busy}
+                className="border-2 border-line px-3 py-1.5 font-mono text-[13.5px] uppercase text-fog transition-colors hover:border-fog hover:text-paper disabled:opacity-60">
+                {busy ? "checking…" : "I deposited → activate"}
+              </button>
+            </div>
+            <div className="font-serif text-[13px] italic leading-snug text-fog">
+              Hit <span className="font-bold">Deposit</span> (top-right on Derive),
+              fund the same wallet, then come back here.
+            </div>
           </div>
         )}
 
@@ -274,8 +318,14 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
 
         <div className="font-serif text-[13.5px] italic leading-snug text-fog">
           {priv
-            ? "REAL FUNDS: live orders on Derive mainnet, capped per cycle. Pause any time by revoking the session key at app.derive.xyz → Developers."
-            : "Testnet pilot: fake money, real orders, real 24/7 loop. Pause any time by revoking the session key at testnet.derive.xyz → Developers."}
+            ? "REAL FUNDS: live orders on Derive mainnet, capped per cycle. "
+            : "Testnet pilot: fake money, real orders, real 24/7 loop. "}
+          Pause any time by revoking the session key on the{" "}
+          <a href={devUrl} target="_blank" rel="noreferrer"
+             className="not-italic underline decoration-1 underline-offset-2 hover:text-paper">
+            {venueUrl}/developers
+          </a>{" "}
+          page.
         </div>
       </div>
     </div>
