@@ -78,6 +78,15 @@ check("coverageCap fully short → 0", coverageCap(4, 3.6, 0.9) === 0);
   check("ioc buy crosses ask", iocBuy.tif === "ioc" && iocBuy.px >= 105);
   const iocSell = priceLeg({ maker: false, isBid: false, refMark: 100, bid: 95, ask: 105, tickSz: 1 });
   check("ioc sell crosses bid", iocSell.tif === "ioc" && iocSell.px <= 95);
+  // no-liquidity guard: an IOC with no touch to cross must degrade to a resting
+  // fair maker (else Derive rejects it 11009 "Zero liquidity").
+  const noBid = priceLeg({ maker: false, isBid: false, refMark: 100, bid: 0, ask: 105, tickSz: 1 });
+  check("sell into empty bid → rests post_only at/above mark", noBid.tif === "post_only" && noBid.px >= 100);
+  const noAsk = priceLeg({ maker: false, isBid: true, refMark: 100, bid: 95, ask: 0, tickSz: 1 });
+  check("buy into empty ask → rests post_only at/below mark", noAsk.tif === "post_only" && noAsk.px <= 100);
+  // a lowball bid still degrades to maker (unchanged behaviour)
+  const lowball = priceLeg({ maker: false, isBid: false, refMark: 100, bid: 50, ask: 105, tickSz: 1 });
+  check("sell into lowball bid → rests post_only", lowball.tif === "post_only");
 }
 
 // ---- dcaDue ---------------------------------------------------------------

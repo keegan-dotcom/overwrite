@@ -380,15 +380,30 @@ export function AppDemo() {
     // coherence layer: build the structured plan (the IR the executor runs)
     // and validate it. This is what refuses trades that don't achieve the goal
     // and confirms the ones that do - always in code, never left to the model.
-    // on mainnet, size against REAL balances (holdings + free USDC); else demo
-    const acct = onMainnet && hostedSt?.collaterals?.length
-      ? {
-          holdings: hostedSt.collaterals
-            .filter((c) => c.asset !== "USDC" && c.amount > 0)
-            .map((c) => ({ asset: c.asset, amount: c.amount })),
-          freeUsdc: hostedSt.collaterals.find((c) => c.asset === "USDC")?.amount ?? 0,
-        }
-      : undefined;
+    // On mainnet, size against REAL balances — never the demo portfolio (that
+    // was the "24 ETH" bug: when the live venue snapshot hadn't loaded, the
+    // planner fell back to DEMO_PORTFOLIO and told you it was working your 24
+    // demo ETH instead of your actual holdings). Prefer the live venue snapshot;
+    // otherwise use the same Derive-account / connected-wallet balances the
+    // vault already shows. Only fall back to demo when NOT connected (the
+    // marketing preview), never once a real wallet is attached.
+    let acct: { holdings: { asset: string; amount: number }[]; freeUsdc: number } | undefined;
+    if (onMainnet && (hostedSt?.collaterals?.length || activeHoldings)) {
+      const cols = hostedSt?.collaterals;
+      acct = cols?.length
+        ? {
+            holdings: cols
+              .filter((c) => c.asset !== "USDC" && c.amount > 0)
+              .map((c) => ({ asset: c.asset, amount: c.amount })),
+            freeUsdc: cols.find((c) => c.asset === "USDC")?.amount ?? 0,
+          }
+        : {
+            holdings: (activeHoldings ?? [])
+              .filter((h) => h.qty > 0)
+              .map((h) => ({ asset: h.symbol, amount: h.qty })),
+            freeUsdc: deriveAcct?.usdc ?? 0,
+          };
+    }
     const { plan, result } = planAndValidate({
       symbol: p.symbol, strategyId: p.strategyId, params: p.params, understood: p.understood,
     }, acct);

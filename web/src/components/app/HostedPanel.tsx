@@ -18,6 +18,7 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
   const [st, setSt] = useState<HostedStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [pollMsg, setPollMsg] = useState("");
 
   const refresh = async (w: string) => {
     if (/^0x[0-9a-fA-F]{40}$/.test(w)) setSt(await hostedStatus(w, ownerEoa));
@@ -44,16 +45,34 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
     } finally { setBusy(false); }
   };
 
-  /** Path A: user registered our key in Derive's UI (gasless paymaster). */
+  /** Path A: user registered our key in Derive's UI (gasless paymaster).
+   * Auto-polls for ~90s — Derive can take 30-60s to index a freshly-registered
+   * key, so a single check almost always looked like "still not activated".
+   * We keep checking and show live progress instead of making you click. */
   const checkActivation = async () => {
-    setErr(""); setBusy(true);
+    setErr(""); setPollMsg(""); setBusy(true);
+    const ATTEMPTS = 18, GAP = 5000;
     try {
-      const a = await hostedActivate(deriveWallet);
-      if (a.status !== "active") {
-        throw new Error(a.detail ?? "not active yet - registration can take ~30s to index; try again");
+      for (let i = 0; i < ATTEMPTS; i++) {
+        setPollMsg(`Checking Derive for your key… (${i + 1}/${ATTEMPTS}) — this can take up to a minute after you register.`);
+        const a = await hostedActivate(deriveWallet);
+        if (a.status === "active") {
+          setPollMsg("");
+          await refresh(deriveWallet);
+          return;
+        }
+        if (i < ATTEMPTS - 1) await new Promise((r) => setTimeout(r, GAP));
       }
-      await refresh(deriveWallet);
+      // still not active after ~90s — give a concrete checklist, not a shrug
+      setPollMsg("");
+      setErr(
+        "Still can't see your key active on Derive after ~90s. Check that: " +
+        "(1) you registered THIS exact key address (copy it again below), " +
+        `(2) the scope was admin, (3) you registered it under the SAME Derive wallet you entered above (${deriveWallet.slice(0, 6)}…${deriveWallet.slice(-4)}), and ` +
+        "(4) the registration actually went through on Derive (no pending/failed tx). Then hit “I registered it → activate” once more.",
+      );
     } catch (e2) {
+      setPollMsg("");
       setErr(String((e2 as Error).message ?? e2));
     } finally { setBusy(false); }
   };
@@ -122,6 +141,23 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
             className="mt-1 w-full border-2 border-line bg-ink px-3 py-1.5 font-mono text-[12.5px] text-paper placeholder:text-fog/50 focus:border-mint focus:outline-none" />
         </label>
 
+        {/* First-timer path: no Derive account yet → send them to create one,
+            then come back and paste the Wallet address. Always visible until
+            they're active, since this is the #1 place people get stuck. */}
+        {!active && (
+          <div className="border border-line bg-ink px-3 py-2.5 font-serif text-[12.5px] leading-snug text-paper/85">
+            <span className="font-bold text-paper">New to Derive — no wallet address yet?</span>{" "}
+            You need a Derive account first (it holds the funds the agent trades).{" "}
+            <a href={`https://${venueUrl}`} target="_blank" rel="noreferrer"
+               className="font-bold text-mint underline decoration-2 underline-offset-2">
+              Create one at {venueUrl} →
+            </a>{" "}
+            (connect the same wallet you connected here, fund it, then open{" "}
+            <span className="font-mono text-[11.5px]">Developers</span> and copy your{" "}
+            <span className="font-bold">“Wallet”</span> address into the box above). Takes about two minutes.
+          </div>
+        )}
+
         {st?.enrolled && st.status === "awaiting_registration" && st.session_key_address && (
           <div className="space-y-2 border-2 border-amber bg-ink px-3 py-2.5">
             <div className="font-mono text-[10.5px] uppercase tracking-[0.12em] text-amber">
@@ -159,6 +195,12 @@ export function HostedPanel({ ownerEoa }: { ownerEoa: string }) {
                 or sign here (needs gas ETH on Derive Chain)
               </button>
             </div>
+            {pollMsg && (
+              <div className="flex items-center gap-2 border border-mint bg-mint/10 px-2.5 py-1.5 font-mono text-[11px] text-mint">
+                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-mint" />
+                {pollMsg}
+              </div>
+            )}
           </div>
         )}
 

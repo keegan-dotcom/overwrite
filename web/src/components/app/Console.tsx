@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { HostedStatus, hostedStatus, strategyLabel } from "../../lib/hosted";
 import { fmtUsd } from "../../lib/options";
 import { getNetwork } from "../../lib/instance";
+import { StrategyBreakdown } from "./StrategyBreakdown";
 
 /**
  * The Console: your real account, live from Derive testnet. Positions, open
@@ -129,6 +130,9 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
           {loading ? "…" : "refresh"}
         </button>
       </div>
+
+      {/* plain-English breakdown of the running strategy + risk flags */}
+      {st.config?.plan != null && <StrategyBreakdown st={st} />}
 
       <div className="grid gap-2 lg:grid-cols-2">
         {/* positions */}

@@ -82,12 +82,29 @@ export function coverageCap(heldBase: number, existingShortCalls: number, util =
 export interface PriceInputs {
   maker: boolean; isBid: boolean;
   refMark: number; bid: number; ask: number; tickSz: number;
+  minCrossFrac?: number;   // taker fair-value guard vs mark (default 0.9)
 }
 /** Compute a limit price + time-in-force for a leg. Maker legs rest without
- * crossing; taker legs cross a hair to fill via IOC. Pure. */
+ * crossing; taker legs cross a hair to fill via IOC — BUT only when the far
+ * touch is within `minCrossFrac` of mark, so a taker order never dumps into a
+ * lowball bid (or lifts a gouging ask). If the touch is unfair, the taker
+ * degrades to a resting maker at a fair price: it fills when the book is
+ * reasonable, and never makes a bad trade when it isn't. Pure. */
 export function priceLeg(p: PriceInputs): { px: number; tif: "post_only" | "ioc" } {
-  const { maker, isBid, refMark, bid, ask, tickSz } = p;
+  const { isBid, refMark, bid, ask, tickSz } = p;
+  const frac = p.minCrossFrac ?? 0.9;
   const q = (v: number) => Math.floor(v / tickSz) * tickSz;
+  // fair-value guard: cross only when the touch we'd hit exists AND is close to
+  // mark. A MISSING touch (empty book on our side) is the critical case: an IOC
+  // with nothing to cross is rejected by Derive as "Zero liquidity for market or
+  // IOC/FOK order" (code 11009) — so instead of firing into the void we rest a
+  // fair maker that fills when a quote arrives. Same when the touch is a lowball
+  // bid / gouging ask.
+  let maker = p.maker;
+  if (!maker && refMark > 0) {
+    if (!isBid && (bid <= 0 || bid < refMark * frac)) maker = true;        // no bid, or too low to sell into
+    if (isBid && (ask <= 0 || ask > refMark * (2 - frac))) maker = true;   // no ask, or too high to buy into
+  }
   let px: number;
   let tif: "post_only" | "ioc";
   if (maker) {
