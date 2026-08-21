@@ -131,9 +131,7 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
         </button>
       </div>
 
-      {/* plain-English breakdown of the running strategy + risk flags */}
-      {st.config?.plan != null && <StrategyBreakdown st={st} />}
-
+      {/* position details sit right under the counters — the thing you check first */}
       <div className="grid gap-2 lg:grid-cols-2">
         {/* positions */}
         <div className="border-2 border-line bg-pane">
@@ -198,7 +196,12 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
             </table>
           )}
         </div>
+      </div>
 
+      {/* plain-English breakdown of the running strategy + risk flags — collapsible */}
+      {st.config?.plan != null && <StrategyBreakdown st={st} />}
+
+      <div className="grid gap-2 lg:grid-cols-2">
         {/* activity ledger */}
         <div className="border-2 border-line bg-pane">
           <div className="border-b-2 border-line px-3 py-1.5 font-mono text-[12.5px] uppercase tracking-[0.14em] text-fog">

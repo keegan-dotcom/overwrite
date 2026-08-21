@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { HostedStatus } from "../../lib/hosted";
 
 /**
@@ -195,51 +196,67 @@ export function StrategyBreakdown({ st }: { st: HostedStatus }) {
   const killed = (st as { kill?: boolean }).kill === true;
   const live = cfg.live === true && !killed;
   const d = describe(cfg);
+  // collapsed by default — the header + one-sentence summary is enough to know
+  // what's on at a glance; the full settings table + risk flags roll up so the
+  // Console stays tight, and open on demand for the deep read.
+  const [open, setOpen] = useState(false);
   if (!d) return null;
 
   return (
     <div className="border-2 border-line bg-pane">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b-2 border-line px-3 py-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 border-b-2 border-line px-3 py-1.5 text-left hover:bg-line/20"
+      >
         <span className="font-mono text-[12.5px] uppercase tracking-[0.14em] text-fog">What this agent is doing</span>
-        <span className="min-w-0 flex-1" />
         <span className={`font-mono text-[12.5px] uppercase tracking-[0.1em] ${live ? "text-mint" : killed ? "text-rose" : "text-amber"}`}>
           {live ? "● live" : killed ? "● paused (killed)" : "○ dry-run"}
         </span>
-      </div>
+        <span className="min-w-0 flex-1" />
+        <span className="font-mono text-[12px] uppercase tracking-[0.1em] text-fog">
+          {open ? "hide details ▲" : "settings & risks ▼"}
+        </span>
+      </button>
 
       <div className="space-y-3 px-3 py-3">
-        {/* the one sentence */}
+        {/* the one sentence — always visible */}
         <p className="font-serif text-[15px] leading-relaxed text-paper/95">{d.summary}</p>
 
-        {/* the real knobs */}
-        <div className="border border-line">
-          <div className="border-b border-line px-2.5 py-1 font-mono text-[12px] uppercase tracking-[0.12em] text-fog">
-            The settings it's running with
-          </div>
-          <dl className="divide-y divide-line/60">
-            {d.rows.map((r) => (
-              <div key={r.k} className="flex gap-3 px-2.5 py-1.5">
-                <dt className="w-28 shrink-0 font-mono text-[13px] uppercase tracking-[0.06em] text-fog">{r.k}</dt>
-                <dd className="min-w-0 flex-1 font-serif text-[14.5px] leading-snug text-paper/95">{r.v}</dd>
+        {open && (
+          <>
+            {/* the real knobs */}
+            <div className="border border-line">
+              <div className="border-b border-line px-2.5 py-1 font-mono text-[12px] uppercase tracking-[0.12em] text-fog">
+                The settings it's running with
               </div>
-            ))}
-          </dl>
-        </div>
+              <dl className="divide-y divide-line/60">
+                {d.rows.map((r) => (
+                  <div key={r.k} className="flex gap-3 px-2.5 py-1.5">
+                    <dt className="w-28 shrink-0 font-mono text-[13px] uppercase tracking-[0.06em] text-fog">{r.k}</dt>
+                    <dd className="min-w-0 flex-1 font-serif text-[14.5px] leading-snug text-paper/95">{r.v}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
 
-        {/* ELI5 risk flags */}
-        <div className="border border-line">
-          <div className="border-b border-line px-2.5 py-1 font-mono text-[12px] uppercase tracking-[0.12em] text-fog">
-            What to know before you rely on it
-          </div>
-          <ul className="divide-y divide-line/60">
-            {d.flags.map((f, i) => (
-              <li key={i} className="flex gap-2 px-2.5 py-1.5">
-                <span className={`shrink-0 font-mono text-[14px] leading-tight ${dot[f.tone]}`}>{mark[f.tone]}</span>
-                <span className="min-w-0 flex-1 font-serif text-[14.5px] leading-snug text-paper/95">{f.text}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
+            {/* ELI5 risk flags */}
+            <div className="border border-line">
+              <div className="border-b border-line px-2.5 py-1 font-mono text-[12px] uppercase tracking-[0.12em] text-fog">
+                What to know before you rely on it
+              </div>
+              <ul className="divide-y divide-line/60">
+                {d.flags.map((f, i) => (
+                  <li key={i} className="flex gap-2 px-2.5 py-1.5">
+                    <span className={`shrink-0 font-mono text-[14px] leading-tight ${dot[f.tone]}`}>{mark[f.tone]}</span>
+                    <span className="min-w-0 flex-1 font-serif text-[14.5px] leading-snug text-paper/95">{f.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
