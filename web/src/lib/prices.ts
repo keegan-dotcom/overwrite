@@ -13,7 +13,7 @@ import { ASSETS } from "../data/appdata";
 
 const PROXY = "https://dpfsvupqssfzwsnhpdmg.supabase.co/functions/v1/overwrite-prices";
 const DERIVE_PUBLIC = "https://api.lyra.finance/public/get_ticker";
-const LIVE_SYMBOLS = ["BTC", "ETH", "HYPE"];
+const LIVE_SYMBOLS = ["BTC", "ETH", "HYPE", "XAUT"];
 
 function patch(sym: string, spot: number, iv?: number | null) {
   const a = ASSETS.find((x) => x.symbol === sym);

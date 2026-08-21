@@ -123,6 +123,9 @@ export function AppDemo() {
   const [welcomeTeam, setWelcomeTeam] = useState(false);
   // when >1 wallet extension is installed, let the user pick which to connect.
   const [walletPicker, setWalletPicker] = useState<WalletProvider[] | null>(null);
+  // connected-address dropdown (copy / switch / disconnect).
+  const [walletMenu, setWalletMenu] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [gated, setGated] = useState(() => !termsAccepted());
   // your Derive testnet trading account (collateral the agent actually trades),
@@ -630,6 +633,17 @@ export function AppDemo() {
     </div>
   );
 
+  const disconnectWallet = useCallback(() => {
+    setWallet(null); setDeriveAcct(null); setHostedSt(null); setWalletMenu(false);
+    try { localStorage.removeItem("overwrite_read_auth"); } catch { /* ignore */ }
+  }, []);
+  const switchWallet = useCallback(() => {
+    setWalletMenu(false); setWallet(null); setDeriveAcct(null); setHostedSt(null);
+    const found = listProviders();
+    if (found.length <= 1) void onConnect(found[0]);
+    else setWalletPicker(found);
+  }, [onConnect]);
+
   return (
     <main className="bg-ink px-3 pb-3 pt-16 lg:h-screen lg:overflow-hidden">
       {welcomeTeam && (
@@ -676,30 +690,36 @@ export function AppDemo() {
       )}
       <div className="mx-auto flex h-full max-w-[1500px] flex-col">
         {/* top bar: tabs · assets · venue · wallet */}
-        <div className="mb-2 flex flex-wrap items-center gap-2 border-2 border-line bg-pane px-2 py-1.5">
-          <div className="flex font-mono text-[11px] uppercase tracking-[0.08em]">
+        <div className="mb-2.5 flex flex-wrap items-center gap-2.5 border-2 border-line bg-pane px-2.5 py-2">
+          <div className="flex gap-1 font-mono text-[12px] uppercase tracking-[0.06em]">
             {([["trade", "Trade desk"], ["console", "Console"]] as const).map(([id, label]) => (
               <button key={id} onClick={() => setView(id)}
-                className={`border-2 px-3 py-1 transition-colors ${
+                className={`border-2 px-3.5 py-1.5 transition-colors ${
                   view === id ? "border-mint bg-ink font-bold text-mint" : "border-transparent text-fog hover:text-paper"
                 }`}>
                 {label}
               </button>
             ))}
           </div>
-          <div className="h-5 w-px bg-line" />
-          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-            {ASSETS.map((a) => {
+          <div className="h-6 w-px bg-line" />
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
+            {ASSETS.map((a, i) => {
               const on = a.symbol === selected;
+              const groupOf = (s: string) =>
+                ["BTC", "ETH", "HYPE"].includes(s) ? 0 : s === "XAUT" ? 1 : 2;
+              const newGroup = i > 0 && groupOf(a.symbol) !== groupOf(ASSETS[i - 1].symbol);
               return (
-                <button key={a.symbol} onClick={() => onSelectAsset(a.symbol)}
-                  className={`shrink-0 border px-2 py-1 font-mono text-[11px] transition-colors ${
-                    on ? "border-mint text-mint" : a.live ? "border-transparent text-paper hover:border-line" : "border-transparent text-fog"
-                  }`}>
-                  <span className="font-bold">{a.symbol}</span>
-                  {on && <span className="ml-1.5 text-mint/70">{fmtUsd(a.spot)} · IV {fmtPct(a.iv, 0)}</span>}
-                  {!a.live && <span className="ml-1 text-[8px] uppercase text-amber">soon</span>}
-                </button>
+                <div key={a.symbol} className="flex shrink-0 items-center gap-1.5">
+                  {newGroup && <span className="h-5 w-px bg-line/70" />}
+                  <button onClick={() => onSelectAsset(a.symbol)}
+                    className={`shrink-0 border px-2.5 py-1.5 font-mono text-[12.5px] transition-colors ${
+                      on ? "border-mint text-mint" : a.live ? "border-transparent text-paper hover:border-line" : "border-transparent text-fog"
+                    }`}>
+                    <span className="font-bold">{a.symbol}</span>
+                    {on && <span className="ml-1.5 text-[11px] text-mint/70">{fmtUsd(a.spot)} · IV {fmtPct(a.iv, 0)}</span>}
+                    {!a.live && <span className="ml-1 text-[9px] uppercase tracking-wide text-amber">soon</span>}
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -709,20 +729,47 @@ export function AppDemo() {
               window.location.reload();
             }}
             title="Switch network"
-            className={`border-2 px-1.5 py-1 font-mono text-[10px] font-bold uppercase focus:outline-none ${
+            className={`border-2 px-2 py-1.5 font-mono text-[11px] font-bold uppercase focus:outline-none ${
               onMainnet ? "border-rose bg-rose/10 text-rose" : "border-line bg-ink text-mint"
             }`}>
             <option value="demo">Demo · testnet</option>
             <option value="mainnet">Mainnet · live</option>
           </select>
-          {(
-            <button onClick={() => onConnect()} disabled={!!connecting}
-              className={`border-2 px-2.5 py-1 font-mono text-[10.5px] uppercase transition-colors ${
+          <div className="relative">
+            <button
+              onClick={() => { if (wallet) setWalletMenu((v) => !v); else void onConnect(); }}
+              disabled={!!connecting}
+              className={`flex items-center gap-1.5 border-2 px-3 py-1.5 font-mono text-[11.5px] uppercase transition-colors ${
                 wallet ? "border-mint text-mint" : "border-paper bg-accent font-bold text-ink shadow-hardsm"
               } disabled:opacity-70`}>
-              {connecting ? "connecting…" : wallet ? `${shortAddr(wallet.address)}` : "Connect wallet"}
+              {connecting ? "connecting…" : wallet ? shortAddr(wallet.address) : "Connect wallet"}
+              {wallet && !connecting && <span className="text-[9px] leading-none">▾</span>}
             </button>
-          )}
+            {wallet && walletMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setWalletMenu(false)} />
+                <div className="absolute right-0 z-50 mt-1 w-56 border-2 border-mint bg-pane shadow-hardsm">
+                  <div className="border-b border-line px-3 py-2">
+                    <div className="font-mono text-[9px] uppercase tracking-[0.1em] text-fog">connected</div>
+                    <div className="mt-0.5 break-all font-mono text-[10px] text-paper">{wallet.address}</div>
+                  </div>
+                  <button
+                    onClick={() => { try { void navigator.clipboard?.writeText(wallet.address); setCopied(true); setTimeout(() => setCopied(false), 1200); } catch { /* ignore */ } }}
+                    className="block w-full px-3 py-2 text-left font-mono text-[10.5px] uppercase text-paper transition-colors hover:bg-ink hover:text-mint">
+                    {copied ? "copied ✓" : "copy address"}
+                  </button>
+                  <button onClick={switchWallet}
+                    className="block w-full px-3 py-2 text-left font-mono text-[10.5px] uppercase text-paper transition-colors hover:bg-ink hover:text-mint">
+                    switch wallet
+                  </button>
+                  <button onClick={disconnectWallet}
+                    className="block w-full border-t border-line px-3 py-2 text-left font-mono text-[10.5px] uppercase text-rose transition-colors hover:bg-rose hover:text-ink">
+                    disconnect
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           {onMainnet ? (
             <span className="border-2 border-rose bg-rose/10 px-1.5 py-1 font-mono text-[9px] font-bold uppercase text-rose">
               ● real funds

@@ -52,7 +52,9 @@ export function planFromIntent(parsed: ParsedIntent, account?: AccountCtx): Stra
       objective.kind = "income";
       objective.targetYieldAnnual = p.targetYieldAnnual;
       legs.push({
-        id: "call", venue: "option", asset, side: "sell", orderType: "post_only",
+        // cross to fill when the bid is fair (executor gates on a fair-value
+        // floor); a resting maker never fills on Derive's one-sided books.
+        id: "call", venue: "option", asset, side: "sell", orderType: "ioc",
         sizing: { kind: "pct_of_collateral", pct: 90 },
         option: {
           type: "C", expiry: dte,
@@ -70,7 +72,7 @@ export function planFromIntent(parsed: ParsedIntent, account?: AccountCtx): Stra
       objectiveKind = "accumulate";
       objective.kind = "accumulate";
       legs.push({
-        id: "put", venue: "option", asset, side: "sell", orderType: "post_only",
+        id: "put", venue: "option", asset, side: "sell", orderType: "ioc",
         sizing: { kind: "cash_secured", pct: 100 },
         option: {
           type: "P", expiry: dte,

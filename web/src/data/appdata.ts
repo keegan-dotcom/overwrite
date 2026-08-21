@@ -20,6 +20,7 @@ export const ASSETS: Asset[] = [
   { symbol: "BTC",  name: "Bitcoin",  spot: 98_400, iv: 0.38, live: true,  step: 500 },
   { symbol: "ETH",  name: "Ethereum", spot: 3_820,  iv: 0.50, live: true,  step: 50 },
   { symbol: "HYPE", name: "Hyperliquid", spot: 44.8, iv: 0.85, live: true, step: 1 },
+  { symbol: "XAUT", name: "Tether Gold", spot: 2_680, iv: 0.14, live: true, step: 10 },
   { symbol: "SPX",  name: "S&P 500 (tokenized)", spot: 6_310, iv: 0.165, live: false, step: 25 },
   { symbol: "NVDA", name: "Nvidia (tokenized)",  spot: 188,   iv: 0.445, live: false, step: 5 },
   { symbol: "AAPL", name: "Apple (tokenized)",   spot: 232,   iv: 0.22,  live: false, step: 5 },
