@@ -145,6 +145,19 @@ export function parseIntent(text: string): ParsedIntent {
     }
   }
 
+  // strike defense: "roll up if it gets within 5% of my strike", "defend my
+  // strike", "don't cap my upside", "keep rolling higher". Sets how close spot
+  // can get to the short strike before the agent buys it back and re-sells
+  // further out — repeating until you kill it.
+  const defendWords = /defend|don'?t cap|dont cap|keep my upside|roll (?:it |the call |up|higher)|chase the strike|move the strike|don'?t (?:want to )?get (?:called|assigned)|avoid (?:being )?(?:called|assigned)|not miss (?:out on )?(?:the )?upside/;
+  if (defendWords.test(t)) {
+    // optional explicit proximity: "within 5%", "5% of my strike", "at 5%"
+    const near = t.match(/within\s*(\d+(?:\.\d+)?)\s*%|(\d+(?:\.\d+)?)\s*%\s*(?:of|from|away)/);
+    const pct = near ? parseFloat(near[1] ?? near[2]) / 100 : 0.05;
+    params.defendProximityPct = Math.min(0.25, Math.max(0.01, pct));
+    understood.push(`Strike defense: roll up/out when price comes within ${(params.defendProximityPct * 100).toFixed(0)}% of the strike (repeats until you kill it)`);
+  }
+
   // horizon: "weekly", "monthly", "45 days", "2 months"
   const d = t.match(/(\d+)\s*(day|days|d\b)/);
   const mo = t.match(/(\d+)\s*(month|months|mo\b)/);
@@ -166,10 +179,10 @@ export function parseIntent(text: string): ParsedIntent {
 /** Quick-start prompts shown as chips in the chat. */
 export const SUGGESTED_PROMPTS = [
   "Earn 10% a year on my BTC - happy to sell above $120k. Close it if I'm down 20%.",
+  "Sell ETH calls for income, but roll up if ETH gets within 5% of the strike so I don't cap my upside",
   "Buy me $500 of ETH calls, 60 days out",
   "Protect my ETH from a crash but keep the upside",
   "Get paid to buy the ETH dip",
-  "Short HYPE with capped risk",
   "Earn yield on my BTC without betting on the price",
 ];
 

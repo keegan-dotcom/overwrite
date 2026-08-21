@@ -4,7 +4,7 @@
  */
 import {
   chooseOption, resolveAmount, coverageCap, priceLeg, dcaDue, callDeltaBS,
-  manageDecision, optionDteDays,
+  manageDecision, optionDteDays, optionStrike,
   type OptCand,
 } from "./plan_exec.ts";
 import type { Leg, StrategyPlan } from "./strategy.ts";
@@ -112,6 +112,31 @@ check("DCA not due after 3d (cadence 7)", !dcaDue(7, now - 3 * 86400_000, now));
   check("roll holds outside 21 DTE", !manageDecision({ amount: -1, entry: 10, mark: 9, dteDays: 30, takeProfitPct: 0.75, rollDte: 21 }).close);
   check("never manages a LONG", !manageDecision({ amount: 1, entry: 10, mark: 1, dteDays: 5, takeProfitPct: 0.75, rollDte: 21 }).close);
   check("no rules set → never closes", !manageDecision({ amount: -1, entry: 10, mark: 0.1, dteDays: 1 }).close);
+}
+
+// ---- optionStrike ---------------------------------------------------------
+{
+  check("strike parses ETH-20260925-2800-C → 2800", optionStrike("ETH-20260925-2800-C") === 2800);
+  check("strike parses BTC-20260828-109000-C → 109000", optionStrike("BTC-20260828-109000-C") === 109000);
+  check("strike of a perp name → NaN", Number.isNaN(optionStrike("ETH-PERP")));
+}
+
+// ---- manageDecision: strike defense (proximity roll) ----------------------
+{
+  const base = { amount: -1, entry: 60, dteDays: 40, takeProfitPct: 0.75, rollDte: 21, defendPct: 0.05 };
+  // short CALL strike 2800, spot 2700 → within 5% (2660 threshold) → defend/roll up
+  check("call defends when spot within 5% of strike", manageDecision({ ...base, mark: 90, spot: 2700, strike: 2800, optionType: "C" }).close);
+  check("call holds when spot far below strike", !manageDecision({ ...base, mark: 20, spot: 2492, strike: 2800, optionType: "C" }).close);
+  check("call defends when spot has blown through strike", manageDecision({ ...base, mark: 200, spot: 2950, strike: 2800, optionType: "C" }).close);
+  // reason mentions rolling up
+  check("call defend reason says roll up", manageDecision({ ...base, mark: 90, spot: 2700, strike: 2800, optionType: "C" }).reason.includes("roll up"));
+  // short PUT strike 2400, spot 2450 → within 5% from above → defend/roll down
+  check("put defends when spot within 5% of strike", manageDecision({ ...base, mark: 90, spot: 2450, strike: 2400, optionType: "P" }).close);
+  check("put holds when spot far above strike", !manageDecision({ ...base, mark: 20, spot: 2800, strike: 2400, optionType: "P" }).close);
+  // defense off (no defendPct) → old behavior, holds a rich near-strike call
+  check("no defendPct → does not roll on proximity", !manageDecision({ amount: -1, entry: 60, mark: 90, dteDays: 40, takeProfitPct: 0.75, rollDte: 21, spot: 2700, strike: 2800, optionType: "C" }).close);
+  // defense takes priority but TP still works when defense not triggered
+  check("TP still fires with defense armed but spot far", manageDecision({ ...base, mark: 12, spot: 2492, strike: 2800, optionType: "C" }).close);
 }
 
 // ---- callDeltaBS sanity ---------------------------------------------------

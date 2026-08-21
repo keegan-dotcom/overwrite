@@ -75,6 +75,7 @@ RULES
 - sizeUsd: a DOLLAR BUDGET to spend on a direct call/put/lotto buy ("buy $100 of calls", "put $500 into puts"). This is money spent, NOT a strike price — keep it separate from capTarget.
 - leverage: for perp_long / perp_short, the multiple the user asks for ("5x" → 5, "ape 10x" → 10). Clamp 2–20. Omit for non-perp strategies.
 - stopLossPct: decimal, from "close/bail/exit if down X%".
+- defendProximityPct: decimal, ONLY for strategies that sell an option (income/wheel/collar/neutral/strangle). Set it when the user wants the agent to roll the short strike up/out to keep upside as price approaches — e.g. "roll it up if ETH gets within 5% of my strike", "defend my strike", "don't cap my upside", "keep rolling higher so I don't get called away". Use the % they name (5% → 0.05); default 0.05 if they ask for the behavior without a number. Clamp 0.01–0.25. Omit if they don't ask for it.
 - dte: days to expiry if the user implies a horizon (weekly → 7, monthly → 30). Clamp 3-120. Omit if unsaid.
 - FOLLOW-UPS: when a lastIntent JSON is provided, the new message adjusts it. Return the FULL updated intent (e.g. "hit my yield target" → same asset/strategy/yield/stop but drop capTarget; "make the cap 130k" → update capTarget only).
 - understood: 2-5 short traces of what you parsed, e.g. "Income target: 10%/yr", "Auto-close if down 20%".
@@ -95,6 +96,7 @@ const TOOL = {
       dte: { type: ["integer", "null"], description: "days to expiry, 3-120" },
       sizeUsd: { type: ["number", "null"], description: "dollar budget to spend on a direct option buy" },
       leverage: { type: ["number", "null"], description: "perp leverage 2-20 (perp strategies only)" },
+      defendProximityPct: { type: ["number", "null"], description: "decimal 0.01-0.25: roll the short strike up/out when spot is within this % of it (option-selling strategies only)" },
       understood: { type: "array", items: { type: "string" }, description: "2-5 short parse traces" },
       reply: { type: "string", description: "1-2 sentence plain-English response" },
     },
@@ -170,6 +172,7 @@ export default async function handler(req: Request): Promise<Response> {
   const dte = num(input.dte);
   const sizeUsd = num(input.sizeUsd);
   const leverage = num(input.leverage);
+  const defend = num(input.defendProximityPct);
 
   const params: Record<string, number> = {};
   if (y != null && y > 0.004 && y <= 1.5) params.targetYieldAnnual = y;
@@ -178,6 +181,7 @@ export default async function handler(req: Request): Promise<Response> {
   if (dte != null && dte >= 3 && dte <= 120) params.dte = Math.round(dte);
   if (sizeUsd != null && sizeUsd > 0 && sizeUsd < 1_000_000) params.sizeUsd = sizeUsd;
   if (leverage != null && leverage >= 2 && leverage <= 20) params.leverage = Math.round(leverage);
+  if (defend != null && defend >= 0.01 && defend <= 0.25) params.defendProximityPct = defend;
 
   const understood = Array.isArray(input.understood)
     ? input.understood.filter((x: unknown) => typeof x === "string").slice(0, 6)

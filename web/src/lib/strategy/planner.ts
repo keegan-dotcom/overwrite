@@ -224,6 +224,14 @@ export function planFromIntent(parsed: ParsedIntent, account?: AccountCtx): Stra
   if (p.stopLossPct != null) objective.stopLossPct = p.stopLossPct;
   void objectiveKind;
 
+  // strike defense: only meaningful for strategies that hold a SHORT option the
+  // agent can roll (covered call, wheel, collar, neutral, strangle). Attach it
+  // to the plan so the fleet reads it straight from the deployed config.
+  const shortLeg = legs.some((l) => l.venue === "option" && l.side === "sell");
+  const manage = (p.defendProximityPct != null && shortLeg)
+    ? { defendProximityPct: p.defendProximityPct }
+    : undefined;
+
   // account context: real balances on mainnet, demo portfolio otherwise, so the
   // validator sizes/feasibility-checks against what the account actually holds.
   // The executor re-hydrates real holdings + USDC at run time regardless.
@@ -236,6 +244,7 @@ export function planFromIntent(parsed: ParsedIntent, account?: AccountCtx): Stra
     constraints,
     spot: { [asset]: spot },
     holdings,
+    ...(manage ? { manage } : {}),
     ...(account?.freeUsdc != null ? { freeUsdc: account.freeUsdc } : {}),
   };
 }

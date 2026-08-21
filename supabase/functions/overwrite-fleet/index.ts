@@ -20,7 +20,7 @@ import {
 import { validatePlan, type StrategyPlan, type Leg, type Capabilities } from "../_shared/strategy.ts";
 import {
   chooseOption, resolveAmount, coverageCap, priceLeg, dcaDue,
-  manageDecision, optionDteDays,
+  manageDecision, optionDteDays, optionStrike,
   type OptCand, type AccountView,
 } from "../_shared/plan_exec.ts";
 import { privateKeyToAccount } from "npm:viem@2/accounts";
@@ -189,8 +189,9 @@ async function unwindPositions(db: any, t: any, cfg: any): Promise<string> {
 async function managePositions(
   db: any, t: any, hdrs: Record<string, string>, subId: number,
   pk: `0x${string}`, positions: any[], tp: number, rollDte: number,
+  defendPct = 0,
 ): Promise<string[]> {
-  if (!(tp > 0) && !(rollDte > 0)) return [];
+  if (!(tp > 0) && !(rollDte > 0) && !(defendPct > 0)) return [];
   const account = privateKeyToAccount(pk);
   const nowMs = Date.now();
   const notes: string[] = [];
@@ -202,6 +203,9 @@ async function managePositions(
       const tick = await rpc("public/get_ticker", { instrument_name: name }, {});
       const mark = Number(tick.mark_price) || Number(p.mark_price) || 0;
       const ask = Number(tick.best_ask_price) || 0;
+      // underlying/index price drives strike-defense; only trust a real index.
+      const spot = Number(tick.index_price) || Number(tick.underlying_price) || 0;
+      const optType = name.endsWith("-P") ? "P" : "C";
       const dec = manageDecision({
         amount: Number(p.amount),
         entry: Number(p.average_price ?? 0),
@@ -209,6 +213,10 @@ async function managePositions(
         dteDays: optionDteDays(name, nowMs),
         takeProfitPct: tp > 0 ? tp : undefined,
         rollDte: rollDte > 0 ? rollDte : undefined,
+        spot: defendPct > 0 ? spot : undefined,
+        strike: defendPct > 0 ? optionStrike(name) : undefined,
+        optionType: optType,
+        defendPct: defendPct > 0 ? defendPct : undefined,
       });
       if (!dec.close) continue;
       // gouge cap: pay up to mark*1.25 to buy back; otherwise wait a cycle.
@@ -292,7 +300,8 @@ async function cycle(db: any, t: any): Promise<string> {
     const tp = Number(cfg.take_profit_pct ?? 0.75);
     let rollDte = Number(cfg.roll_dte ?? 21);
     if (rollDte >= Number(cfg.dte_min ?? 25)) rollDte = 0;
-    try { notes.push(...await managePositions(db, t, hdrs, subId, pk, sub?.positions ?? [], tp, rollDte)); }
+    const defendPct = Number(cfg.defend_proximity_pct ?? cfg.plan?.manage?.defendProximityPct ?? 0);
+    try { notes.push(...await managePositions(db, t, hdrs, subId, pk, sub?.positions ?? [], tp, rollDte, defendPct)); }
     catch (e) { notes.push(`manage skipped: ${String(e).slice(0, 60)}`); }
   }
 
@@ -737,7 +746,8 @@ async function runPlan(db: any, t: any, cfg: any): Promise<string> {
     const tp = Number(cfg.take_profit_pct ?? 0.75);
     let rollDte = Number(cfg.roll_dte ?? 21);
     if (rollDte >= planDteMin) rollDte = 0; // plan intentionally trades shorter than the roll → don't churn
-    try { notes.push(...await managePositions(db, t, hdrs, subId, pk, positions, tp, rollDte)); }
+    const defendPct = Number(cfg.defend_proximity_pct ?? cfg.plan?.manage?.defendProximityPct ?? 0);
+    try { notes.push(...await managePositions(db, t, hdrs, subId, pk, positions, tp, rollDte, defendPct)); }
     catch (e) { notes.push(`manage skipped: ${String(e).slice(0, 60)}`); }
   }
   const firedRecurring: string[] = [];

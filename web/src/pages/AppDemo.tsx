@@ -92,7 +92,7 @@ async function fetchLlmIntent(message: string, lastIntent: unknown): Promise<Inc
 
 const HELLO: ChatMsg = {
   role: "agent",
-  text: "Tell me what you want in plain English and I'll structure it, show every tradeoff, and run it 24/7 from your own isolated vault. Anything from \"earn 10% on my BTC\" or \"protect my ETH\" to a straight \"buy me $500 of ETH calls\" — I'll suggest a smart structure you can tune and deploy in one click. (Flip on Degen mode for leverage and naked-premium plays.)",
+  text: "Tell me what you want in plain English — \"earn 10% on my BTC\", \"protect my ETH\", or \"buy $500 of ETH calls\". I'll structure it, show every tradeoff, and run it 24/7 from your own vault — tune it, then deploy in one click.",
 };
 
 export function AppDemo() {
@@ -689,6 +689,23 @@ export function AppDemo() {
   const [feedOpen, setFeedOpen] = useState(false);
   const lastFeed = feed.length ? feed[feed.length - 1] : null;
 
+  // When a real 24/7 agent is live, the active-management popup (and its footer
+  // bar) must show the ACTUAL account — not the empty demo desk. Mirror the
+  // Console's live status so "open positions" never reads 0 while a real
+  // position is on.
+  const agentLive = onMainnet && hostedSt?.enrolled && hostedSt.status === "active";
+  const liveFeed = agentLive
+    ? {
+        positions: (hostedSt!.positions ?? []).map((p) => ({
+          instrument: p.instrument, amount: p.amount, mark: p.mark, upnl: p.unrealized_pnl,
+        })),
+        cycles: (hostedSt!.cycles ?? []).slice(0, 24).map((c) => ({
+          ts: new Date(c.ts).toLocaleTimeString(), msg: c.msg, ok: c.ok,
+        })),
+      }
+    : null;
+  const openCount = liveFeed ? liveFeed.positions.length : positions.length;
+
   // Hosted-only: after a deploy, the single next step is the Console (watch it
   // run / pause / unwind). No "browser vs hosted vs self-host" fork — the site
   // is for people who want the hosted agent, full stop.
@@ -902,10 +919,12 @@ export function AppDemo() {
                 className="flex shrink-0 items-center gap-2 border-2 border-line bg-pane px-3 py-1.5 text-left font-mono text-[13px] transition-colors hover:border-fog">
                 <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-mint" />
                 <span className="text-fog">agent</span>
-                <span className="text-paper">{positions.length} open</span>
-                {suggestion && <span className="border border-amber px-1 text-[12px] uppercase text-amber">1 suggestion</span>}
+                <span className="text-paper">{openCount} open</span>
+                {suggestion && !liveFeed && <span className="border border-amber px-1 text-[12px] uppercase text-amber">1 suggestion</span>}
                 <span className="min-w-0 flex-1 truncate text-fog">
-                  {lastFeed ? `${lastFeed.ts} ${lastFeed.text}` : "the loop starts when you deploy"}
+                  {liveFeed
+                    ? (liveFeed.cycles[0] ? `${liveFeed.cycles[0].ts} ${liveFeed.cycles[0].msg}` : "agent live · watching")
+                    : lastFeed ? `${lastFeed.ts} ${lastFeed.text}` : "the loop starts when you deploy"}
                 </span>
                 <span className="text-fog">▸</span>
               </button>
@@ -929,7 +948,7 @@ export function AppDemo() {
       {feedOpen && (
         <Modal title="Agent · active management" onClose={() => setFeedOpen(false)}>
           <AgentFeed positions={positions} feed={feed} suggestion={suggestion}
-            onAccept={() => { onAccept(); }} onDismiss={onDismiss} />
+            onAccept={() => { onAccept(); }} onDismiss={onDismiss} live={liveFeed} />
         </Modal>
       )}
       {manage === "hosted" && wallet && (

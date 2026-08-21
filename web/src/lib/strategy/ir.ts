@@ -82,6 +82,12 @@ export interface StrategyPlan {
   spot?: Record<string, number>;
   /** Available USDC collateral, for cash-secured sizing + feasibility checks. */
   freeUsdc?: number;
+  /** Active-management knobs the fleet reads at run time. */
+  manage?: {
+    /** Roll a short option up/out (call) or down/out (put) once spot comes
+     * within this fraction of the strike, e.g. 0.05 = 5%. Repeats until killed. */
+    defendProximityPct?: number;
+  };
 }
 
 /** What Derive actually lists per asset — the executor supplies the live map;

@@ -78,6 +78,7 @@ export type IntentParams = {
   dte: number;
   sizeUsd?: number;   // "buy $100 of calls" — dollar budget for a direct option buy
   leverage?: number;  // "5x long" — leverage for perp strategies (clamped 2–20)
+  defendProximityPct?: number; // "roll up if spot gets within 5% of my strike" (0.05)
 };
 
 const DEF: IntentParams = { targetYieldAnnual: 0.10, capTarget: null, stopLossPct: null, dte: 35 };

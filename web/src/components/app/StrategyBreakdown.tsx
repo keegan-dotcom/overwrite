@@ -21,6 +21,7 @@ type Plan = {
   label?: string; asset?: string;
   objective?: { kind?: string; targetYieldAnnual?: number; view?: string };
   constraints?: { requireDefinedRisk?: boolean; maxLossUsd?: number; maxNotionalUsd?: number };
+  manage?: { defendProximityPct?: number };
   legs?: Leg[];
 };
 type Cfg = {
@@ -134,6 +135,12 @@ function describe(cfg: Cfg): { title: string; summary: string; rows: Row[]; flag
     const shortDteMin = (shortCall ?? shortPut)?.option?.expiry?.dteMin ?? 0;
     if (shortDteMin > roll) rows.push({ k: "Auto-roll", v: `rolls out of the gamma zone at ~${roll} days to expiry, re-selling further out` });
   }
+  // strike defense (proximity roll) — surfaced whenever it's armed
+  const defendPct = plan?.manage?.defendProximityPct ?? (cfg as { defend_proximity_pct?: number }).defend_proximity_pct;
+  if (typeof defendPct === "number" && defendPct > 0 && (shortCall || shortPut)) {
+    const dir = shortCall ? "up" : "down";
+    rows.push({ k: "Strike defense", v: `if ${asset} comes within ${(defendPct * 100).toFixed(0)}% of the ${shortCall ? "call" : "put"} strike, it buys the option back and re-sells ${dir} and further out — automatically, every time, until you kill it` });
+  }
   if (cfg.sweep?.buy) rows.push({ k: "Premium sweep", v: `auto-buys ${String(cfg.sweep.buy).toUpperCase()} with collected premium` });
   const maxLoss = plan?.constraints?.maxLossUsd;
   rows.push({ k: "Max-loss cap", v: maxLoss != null ? `$${maxLoss.toLocaleString()} hard stop` : "none set" });
@@ -183,6 +190,9 @@ function describe(cfg: Cfg): { title: string; summary: string; rows: Row[]; flag
   }
   if (maxLoss == null && (perpDirectional || isStrangle)) {
     flags.push({ tone: "warn", text: `No hard dollar stop-loss set — add one in chat (e.g. "close if down 20%") to cap the damage.` });
+  }
+  if (typeof defendPct === "number" && defendPct > 0 && shortCall) {
+    flags.push({ tone: "good", text: `Upside defense is ON. As ${asset} runs at the strike, the agent buys the call back and re-sells a higher one further out — so the cap keeps moving up with the market instead of stopping your gains. It repeats every cycle until you kill it. (Rolling up costs some of the premium, so income runs a bit lower in exchange for keeping the upside.)` });
   }
 
   return { title, summary, rows, flags };

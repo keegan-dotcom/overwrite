@@ -140,6 +140,14 @@ export function optionDteDays(instrument: string, nowMs: number): number {
   return (expMs - nowMs) / 86400_000;
 }
 
+/** Strike parsed from a Derive option instrument name
+ * (e.g. "ETH-20260925-2800-C" → 2800). NaN if not a dated option. Pure. */
+export function optionStrike(instrument: string): number {
+  const seg = instrument.split("-")[2] ?? "";
+  const n = Number(seg);
+  return Number.isFinite(n) && n > 0 ? n : NaN;
+}
+
 export interface ManageInputs {
   amount: number;          // signed position size (SHORT = negative)
   entry: number;           // average entry price (the credit received per contract)
@@ -147,14 +155,43 @@ export interface ManageInputs {
   dteDays: number;         // days to expiry
   takeProfitPct?: number;  // e.g. 0.75 → close once 75% of the premium has decayed
   rollDte?: number;        // e.g. 21 → close (to roll) once inside 21 DTE
+  // --- strike defense (proximity roll-up / roll-down) --------------------
+  spot?: number;           // current underlying/index price
+  strike?: number;         // this option's strike
+  optionType?: "C" | "P";  // call or put
+  defendPct?: number;      // e.g. 0.05 → defend once spot is within 5% of strike
 }
 /** Decide whether to close a short option position this cycle. ONLY manages
- * shorts (a long has nothing to take-profit here). Take-profit fires when the
- * mark has decayed to (1 − tp) of the entry credit — locking the win early.
- * Roll fires inside the gamma zone (rollDte), so the near-dated short is bought
- * back and the plan re-sells a fresh, further-dated one next. Pure + testable. */
+ * shorts (a long has nothing to take-profit here).
+ *   1. DEFEND — if the underlying comes within `defendPct` of the strike, close
+ *      so the plan re-sells FURTHER out (a short call rolls up, a short put rolls
+ *      down). This is what keeps a covered call from capping you: as price runs
+ *      at the strike, the agent buys the call back and re-sells a higher one,
+ *      over and over, so your upside window keeps moving with the market.
+ *   2. TAKE-PROFIT — mark decayed to (1 − tp) of the entry credit → lock the win.
+ *   3. ROLL — inside the gamma zone (rollDte) → buy back, re-sell further-dated.
+ * Defense is checked first: it's the protective move, and it fires exactly when
+ * the position is threatened (mark rich), which is when take-profit never would.
+ * Pure + testable. */
 export function manageDecision(p: ManageInputs): { close: boolean; reason: string } {
   if (!(p.amount < 0)) return { close: false, reason: "" };
+
+  const dp = p.defendPct;
+  if (dp && dp > 0 && p.strike && p.strike > 0 && p.spot && p.spot > 0) {
+    if (p.optionType === "C" && p.spot >= p.strike * (1 - dp)) {
+      const away = ((p.strike - p.spot) / p.strike) * 100;
+      return { close: true, reason: away <= 0
+        ? `defend: spot $${Math.round(p.spot)} through $${p.strike} call — roll up`
+        : `defend: spot $${Math.round(p.spot)} within ${away.toFixed(1)}% of $${p.strike} call — roll up` };
+    }
+    if (p.optionType === "P" && p.spot <= p.strike * (1 + dp)) {
+      const away = ((p.spot - p.strike) / p.strike) * 100;
+      return { close: true, reason: away <= 0
+        ? `defend: spot $${Math.round(p.spot)} through $${p.strike} put — roll down`
+        : `defend: spot $${Math.round(p.spot)} within ${away.toFixed(1)}% of $${p.strike} put — roll down` };
+    }
+  }
+
   const tp = p.takeProfitPct;
   if (tp && tp > 0 && p.entry > 0 && p.mark <= p.entry * (1 - tp)) {
     return { close: true, reason: `take-profit ${Math.round(tp * 100)}%` };
