@@ -121,6 +121,17 @@ export function AgentBar({
           )}
         </div>
       </div>
+      {/* the "you are NOT flat" guard — only shows in the one dangerous state:
+          agent stopped (killed or dry-run) while options are still on. This is
+          the state a beginner mistakes for "done / no risk". */}
+      {(killed || !live) && !unwinding && pos.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t-2 border-amber bg-amber/10 px-3 py-1.5">
+          <span className="font-mono text-[11px] font-bold uppercase tracking-[0.06em] text-amber">⚠ You are NOT flat</span>
+          <span className="min-w-0 flex-1 font-mono text-[11px] text-amber">
+            {pos.length} open option position{pos.length > 1 ? "s" : ""} still live. Stopping the agent does NOT close {pos.length > 1 ? "them" : "it"} — don&apos;t move your collateral without closing first. Hit <b>Unwind ✕</b> to go flat.
+          </span>
+        </div>
+      )}
       {err && <div className="border-t border-rose px-3 py-1 font-mono text-[10.5px] text-rose">{err}</div>}
     </div>
   );
