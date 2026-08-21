@@ -12,7 +12,7 @@ export function Ticker() {
     <div className="overflow-hidden border-b-2 border-paper bg-pane py-2.5">
       <div className="marquee-track flex w-max items-center gap-10 px-5">
         {row.map((it, i) => (
-          <span key={i} className="flex items-center gap-2.5 font-mono text-[13px] text-dfog">
+          <span key={i} className="flex items-center gap-2.5 font-mono text-[14.5px] text-dfog">
             <span className={`inline-block h-2 w-2 ${it.live ? "bg-mint live-dot" : "bg-amber"}`} />
             <span className="font-bold text-paper">{it.label}</span>
             {it.value}

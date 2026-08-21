@@ -32,7 +32,7 @@ export function TradeTicket({
           <div className="truncate font-display text-lg uppercase tracking-wide text-paper">
             {s.emoji} {q.title}
           </div>
-          <div className="truncate font-mono text-[10px] uppercase tracking-[0.12em] text-fog">
+          <div className="truncate font-mono text-[12.5px] uppercase tracking-[0.12em] text-fog">
             {s.proName} · {q.dte}d · sized to {qty.toLocaleString()} {a.symbol}
             {!a.live && " · preview - awaiting listing"}
           </div>
@@ -41,15 +41,17 @@ export function TradeTicket({
           {q.incomeAnnualPct > 0 ? (
             <>
               <div className="font-display text-xl leading-tight text-mint">{fmtPct(q.incomeAnnualPct, 1)}/yr</div>
-              <div className="font-mono text-[10px] uppercase text-fog">≈ {fmtUsd(income, 0)}/cycle</div>
+              <div className="font-mono text-[12.5px] uppercase text-fog">≈ {fmtUsd(income, 0)}/cycle</div>
             </>
+          ) : q.legs.length === 0 ? (
+            <div className="font-display text-xl leading-tight text-rose">{Math.abs(q.assetQty)}× {q.assetQty < 0 ? "short" : "long"}</div>
           ) : (
-            <div className="font-mono text-[11px] uppercase text-amber">costs {fmtUsd(Math.abs(income), 0)}/cycle</div>
+            <div className="font-mono text-[13px] uppercase text-amber">costs {fmtUsd(Math.abs(income), 0)} to open</div>
           )}
         </div>
       </div>
 
-      <p className="border-b border-line px-4 py-1.5 font-serif text-[13px] leading-snug text-paper">
+      <p className="border-b border-line px-4 py-1.5 font-serif text-[14.5px] leading-snug text-paper">
         {q.headline}
       </p>
 
@@ -59,9 +61,9 @@ export function TradeTicket({
       </div>
 
       {/* legs - compact */}
-      <div className="shrink-0 border-y border-line px-4 py-1.5 font-mono text-[11.5px]">
+      <div className="shrink-0 border-y border-line px-4 py-1.5 font-mono text-[13.5px]">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5">
-          {q.assetQty > 0 && (
+          {q.assetQty > 0 && q.legs.length > 0 && (
             <span className="text-paper">HOLD {qty.toLocaleString()} {a.symbol}</span>
           )}
           {q.legs.map((l, i) => (
@@ -80,20 +82,20 @@ export function TradeTicket({
       {/* disclosures - the scrolling zone */}
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 overflow-y-auto sm:grid-cols-2">
         <div className="border-line px-4 py-2 sm:border-r">
-          <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-amber">
+          <div className="mb-1 font-mono text-[12.5px] uppercase tracking-[0.14em] text-amber">
             Know before you deploy
           </div>
-          <ul className="space-y-1 font-serif text-[12px] leading-snug text-paper/90">
+          <ul className="space-y-1 font-serif text-[14px] leading-snug text-paper/95">
             {q.tradeoffs.map((x, i) => (
               <li key={i} className="flex gap-1.5"><span className="text-amber">→</span><span>{x}</span></li>
             ))}
           </ul>
         </div>
         <div className="px-4 py-2">
-          <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-mint">
+          <div className="mb-1 font-mono text-[12.5px] uppercase tracking-[0.14em] text-mint">
             The agent handles
           </div>
-          <ul className="space-y-1 font-serif text-[12px] leading-snug text-paper/90">
+          <ul className="space-y-1 font-serif text-[14px] leading-snug text-paper/95">
             {managed.map((x, i) => (
               <li key={i} className="flex gap-1.5"><span className="text-mint">✓</span><span>{x}</span></li>
             ))}
@@ -104,7 +106,7 @@ export function TradeTicket({
       {/* pinned footer - CTA always visible */}
       <div className="shrink-0 border-t-2 border-line bg-pane px-4 py-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="min-w-0 font-mono text-[9.5px] uppercase tracking-[0.1em] text-fog">
+          <div className="min-w-0 font-mono text-[12px] uppercase tracking-[0.1em] text-fog">
             your isolated vault · funds never pooled
             <span className="hidden truncate sm:block">{v.keyScope}</span>
           </div>
@@ -112,7 +114,7 @@ export function TradeTicket({
             <button
               onClick={onDeploy}
               disabled={deployed || !a.live}
-              className={`border-2 px-6 py-2 font-mono text-[13px] font-bold uppercase tracking-[0.08em] transition-transform ${
+              className={`border-2 px-6 py-2 font-mono text-[14.5px] font-bold uppercase tracking-[0.08em] transition-transform ${
                 deployed
                   ? "border-line text-fog"
                   : a.live

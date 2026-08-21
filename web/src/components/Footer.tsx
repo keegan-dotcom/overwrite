@@ -7,14 +7,14 @@ export function Footer() {
         <div className="flex flex-col gap-10 md:flex-row md:items-start md:justify-between">
           <div className="max-w-sm">
             <Logo dark />
-            <p className="mt-4 font-serif text-[15px] leading-relaxed text-dfog">
+            <p className="mt-4 font-serif text-[16.5px] leading-relaxed text-dfog">
               The covered-call layer for the tokenized-stock era. Built on
               Derive. Agent open-source, rails paranoid, numbers published.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-10 font-mono text-[13px] sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-10 font-mono text-[14.5px] sm:grid-cols-3">
             <div>
-              <p className="border-b border-darkline pb-2 text-[11px] uppercase tracking-[0.2em] text-dfog">Product</p>
+              <p className="border-b border-darkline pb-2 text-[13px] uppercase tracking-[0.2em] text-dfog">Product</p>
               <ul className="mt-3 space-y-2">
                 <li><a className="hover:text-accent" href="/app">The app</a></li>
                 <li><a className="hover:text-accent" href="/#products">Products</a></li>
@@ -22,7 +22,7 @@ export function Footer() {
               </ul>
             </div>
             <div>
-              <p className="border-b border-darkline pb-2 text-[11px] uppercase tracking-[0.2em] text-dfog">Read</p>
+              <p className="border-b border-darkline pb-2 text-[13px] uppercase tracking-[0.2em] text-dfog">Read</p>
               <ul className="mt-3 space-y-2">
                 <li><a className="hover:text-accent" href="/#honest">Expected returns</a></li>
                 <li><a className="hover:text-accent" href="/#how">How it works</a></li>
@@ -31,7 +31,7 @@ export function Footer() {
               </ul>
             </div>
             <div>
-              <p className="border-b border-darkline pb-2 text-[11px] uppercase tracking-[0.2em] text-dfog">Elsewhere</p>
+              <p className="border-b border-darkline pb-2 text-[13px] uppercase tracking-[0.2em] text-dfog">Elsewhere</p>
               <ul className="mt-3 space-y-2">
                 <li><a className="hover:text-accent" href="https://derive.xyz" target="_blank" rel="noreferrer">Derive ↗</a></li>
                 <li><a className="hover:text-accent" href="https://docs.derive.xyz" target="_blank" rel="noreferrer">Derive docs ↗</a></li>
@@ -41,7 +41,7 @@ export function Footer() {
           </div>
         </div>
 
-        <p className="mt-12 border-t border-darkline pt-6 font-mono text-[11px] leading-relaxed text-dfog">
+        <p className="mt-12 border-t border-darkline pt-6 font-mono text-[13px] leading-relaxed text-dfog">
           © {new Date().getFullYear()} Overwrite · A Selby Studio experiment.
           Nothing here is investment, legal, or tax advice. Covered calls cap
           upside and retain downside; premium yield is not total return. Smart

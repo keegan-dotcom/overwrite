@@ -82,7 +82,7 @@ export function Waitlist() {
               Something broke — email {FALLBACK_MAILTO} instead.
             </p>
           )}
-          <p className="mt-4 font-mono text-[11px] leading-relaxed text-fog">
+          <p className="mt-4 font-mono text-[13px] leading-relaxed text-fog">
             Non-custodial by construction · kill switch always yours · not
             investment advice · not available to US persons for tokenized
             equities.

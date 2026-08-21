@@ -5,8 +5,6 @@ import { callPrice, strikeForYield, fmtUsd, fmtPct } from "../lib/options";
 import { parseIntent } from "../lib/intent";
 import { planAndValidate, describePlan } from "../lib/strategy/planner";
 import { refreshLivePrices } from "../lib/prices";
-import { RunItYourself } from "../components/app/RunItYourself";
-import { TestnetPanel } from "../components/app/TestnetPanel";
 import { HostedPanel } from "../components/app/HostedPanel";
 import { Console } from "../components/app/Console";
 import { TermsGate, termsAccepted } from "../components/app/TermsGate";
@@ -173,6 +171,24 @@ export function AppDemo() {
     timers.current.push(window.setTimeout(fn, ms));
   };
 
+  // Real-account context used to size/validate plans: prefer the live venue
+  // snapshot, else the connected Derive account / wallet. Undefined (→ demo
+  // portfolio) only when NOT connected on mainnet — the marketing preview.
+  const currentAcct = useCallback(():
+    { holdings: { asset: string; amount: number }[]; freeUsdc: number } | undefined => {
+    if (!(onMainnet && (hostedSt?.collaterals?.length || activeHoldings))) return undefined;
+    const cols = hostedSt?.collaterals;
+    return cols?.length
+      ? {
+          holdings: cols.filter((c) => c.asset !== "USDC" && c.amount > 0).map((c) => ({ asset: c.asset, amount: c.amount })),
+          freeUsdc: cols.find((c) => c.asset === "USDC")?.amount ?? 0,
+        }
+      : {
+          holdings: (activeHoldings ?? []).filter((h) => h.qty > 0).map((h) => ({ asset: h.symbol, amount: h.qty })),
+          freeUsdc: deriveAcct?.usdc ?? 0,
+        };
+  }, [onMainnet, hostedSt, activeHoldings, deriveAcct]);
+
   const structure = useCallback((sym: string, stratId: string, params: Partial<IntentParams> = {}, mode: "shelf" | "chat" | "silent" = "shelf") => {
     const a = asset(sym);
     const s = strategy(stratId);
@@ -186,6 +202,13 @@ export function AppDemo() {
     setTicket(q);
     setTicketQty(qty);
     setDeployedTicket(false);
+    // keep the deployable IR plan in sync with the ticket, so one-click
+    // "Approve & deploy" works for rail picks too — not just the chat path.
+    try {
+      const { plan, result } = planAndValidate(
+        { symbol: sym, strategyId: stratId, params: merged, understood: [] }, currentAcct());
+      setPendingPlan(result.ok ? plan : null);
+    } catch { setPendingPlan(null); }
     if (mode === "shelf") {
       setMessages((m) => [
         ...m,
@@ -200,7 +223,7 @@ export function AppDemo() {
       later(60, () => ticketRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
     }
     return q;
-  }, []);
+  }, [currentAcct]);
 
   // the page opens composed: default strategy on the default asset
   useEffect(() => {
@@ -524,28 +547,35 @@ export function AppDemo() {
     })();
   }, [structure, applyIntent, onMainnet, hostedSt, wallet, refreshHosted]);
 
-  // deploy the last coherent chat plan to the hosted mainnet agent (dry-run)
-  const deployPlan = useCallback(async () => {
+  // ONE-CLICK deploy: push the plan to your 24/7 hosted agent AND go live, in a
+  // single action. Like an etherfi deposit — approve once, it starts working.
+  // The only extra step that can ever exist is the ONE-TIME session-key setup;
+  // once that's done, every future deploy is a single click (+ one real-funds
+  // confirm). No dry-run detour, no "browser vs hosted" fork.
+  const deployLive = useCallback(async () => {
     if (!pendingPlan || !wallet) return;
     let dw = hostedSt?.derive_wallet ?? "";
     if (!dw) { try { dw = localStorage.getItem("overwrite_derive_wallet") ?? ""; } catch { /* noop */ } }
-    if (!/^0x[0-9a-fA-F]{40}$/.test(dw)) {
-      setMessages((m) => [...m, { role: "agent", text: "Set up your mainnet agent first (connect + enroll), then I can deploy this plan to it." }]);
+    // not set up yet → open the one-time agent setup (enroll + register key).
+    if (!/^0x[0-9a-fA-F]{40}$/.test(dw) || !hostedSt?.enrolled || hostedSt.status !== "active") {
+      setManage("hosted");
+      setMessages((m) => [...m, { role: "agent", text: "One-time setup first: authorize your 24/7 agent's key (takes ~2 min). After that, deploying any strategy is a single click." }]);
       return;
     }
-    // if a strategy is already running, deploying REPLACES it — say so first
     const existing = (hostedSt?.config?.plan as { label?: string } | undefined)?.label
-      ?? (hostedSt?.enrolled && hostedSt?.status === "active" ? strategyLabel(hostedSt?.config) : "");
-    if (existing && !window.confirm(
-      `This replaces your current strategy (${existing}) with "${pendingPlan.label}" and starts it in dry-run — your existing resting orders get cancelled. Only one strategy runs per account. Continue?`)) {
-      return;
-    }
+      ?? (hostedSt?.status === "active" ? strategyLabel(hostedSt?.config) : "");
+    const msg = existing
+      ? `Replace your live strategy (${existing}) with "${pendingPlan.label}" and go LIVE now with real funds? Your existing orders get cancelled and it places its first order immediately.`
+      : `Deploy "${pendingPlan.label}" and go LIVE now with real funds on Derive mainnet? It places its first order immediately. You can pause or unwind anytime.`;
+    if (!window.confirm(msg)) return;
     setDeploying(true);
     try {
-      await hostedDeployPlan(dw, wallet.address, pendingPlan);
+      await hostedDeployPlan(dw, wallet.address, pendingPlan); // sets the plan (server forces dry-run)
+      await hostedSetLive(dw, wallet.address, true);           // …then flips it live + fires one cycle now
+      setDeployedTicket(true);
       setMessages((m) => [...m, {
         role: "agent",
-        text: `Deployed "${pendingPlan.label}" to your agent in DRY-RUN — it logs exactly what it would trade each 15-minute cycle, places nothing. Review it in the Console, then flip it live from the agent bar when you're happy.`,
+        text: `Live — "${pendingPlan.label}" is deployed and your agent is placing its first order now. Watch it fill in the Console; pause, unwind, or restructure any time.`,
       }]);
       setPendingPlan(null);
       await refreshHosted();
@@ -556,6 +586,10 @@ export function AppDemo() {
 
   const onDeploy = useCallback(() => {
     if (!ticket) return;
+    // Real app (mainnet) with a connected wallet: Approve & deploy IS the
+    // one-click hosted go-live — no second screen, no "run it: hosted/browser".
+    if (onMainnet && wallet) { void deployLive(); return; }
+    // Pre-connect marketing preview: simulate the loop so visitors can see it.
     const a = asset(ticket.assetSymbol);
     const qty = ticketQty;
     setDeployedTicket(true);
@@ -571,7 +605,7 @@ export function AppDemo() {
       ...m,
       {
         role: "agent",
-        text: `Deployed from your vault. I'm running it now - take-profits, rolls, and market reactions are automatic, and I'll ping you before anything changes shape. Prefer your own machine? A "Run it yourself" panel just appeared under the ticket - download the generated config and run the open-source agent from your terminal.`,
+        text: `This is a preview of the loop — take-profits, rolls, and market reactions are all automatic. Connect your wallet to deploy it live to your own 24/7 agent in one click.`,
       },
     ]);
 
@@ -605,7 +639,7 @@ export function AppDemo() {
         });
       }
     });
-  }, [ticket, ticketQty, venueMode]);
+  }, [ticket, ticketQty, venueMode, onMainnet, wallet, deployLive]);
 
   const onAccept = useCallback(() => {
     if (!suggestion) return;
@@ -623,28 +657,19 @@ export function AppDemo() {
   }, []);
 
 
-  const [manage, setManage] = useState<null | "hosted" | "browser" | "self">(null);
+  const [manage, setManage] = useState<null | "hosted">(null);
   const [feedOpen, setFeedOpen] = useState(false);
   const lastFeed = feed.length ? feed[feed.length - 1] : null;
 
+  // Hosted-only: after a deploy, the single next step is the Console (watch it
+  // run / pause / unwind). No "browser vs hosted vs self-host" fork — the site
+  // is for people who want the hosted agent, full stop.
   const manageButtons = (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className="font-mono text-[11px] font-bold uppercase text-mint">✓ deployed · run it:</span>
-      {wallet && venueMode === "v2" && (
-        <button onClick={() => setManage("hosted")}
-          className="border-2 border-paper bg-accent px-2.5 py-1 font-mono text-[11px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px">
-          24/7 hosted
-        </button>
-      )}
-      {wallet && venueMode === "v2" && (
-        <button onClick={() => setManage("browser")}
-          className="border-2 border-amber px-2.5 py-1 font-mono text-[11px] uppercase text-amber transition-colors hover:bg-amber hover:text-ink">
-          browser order
-        </button>
-      )}
-      <button onClick={() => setManage("self")}
-        className="border-2 border-line px-2.5 py-1 font-mono text-[11px] uppercase text-fog transition-colors hover:border-fog hover:text-paper">
-        self-host
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="font-mono text-[13px] font-bold uppercase text-mint">✓ live</span>
+      <button onClick={() => setView("console")}
+        className="border-2 border-paper bg-accent px-3 py-1 font-mono text-[13px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px">
+        Open Console →
       </button>
     </div>
   );
@@ -667,7 +692,7 @@ export function AppDemo() {
              onClick={() => setWelcomeTeam(false)}>
           <div className="max-w-md border-2 border-mint bg-pane p-6 text-center shadow-hardsm"
                onClick={(e) => e.stopPropagation()}>
-            <div className="mb-2 font-mono text-[11px] uppercase tracking-[0.12em] text-mint">Overwrite × Derive</div>
+            <div className="mb-2 font-mono text-[13px] uppercase tracking-[0.12em] text-mint">Overwrite × Derive</div>
             <h2 className="mb-2 text-2xl font-bold text-paper">Welcome, Derive team</h2>
             <p className="mb-4 text-sm text-fog">
               Your wallet is whitelisted on the V2 mainnet pilot. Describe a goal in plain
@@ -675,7 +700,7 @@ export function AppDemo() {
               books — deploy to dry-run, then flip it live with an owner-signed message.
             </p>
             <button onClick={() => setWelcomeTeam(false)}
-              className="border-2 border-paper bg-accent px-4 py-1.5 font-mono text-[11px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px">
+              className="border-2 border-paper bg-accent px-4 py-1.5 font-mono text-[13px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px">
               Let’s go
             </button>
           </div>
@@ -686,19 +711,19 @@ export function AppDemo() {
              onClick={() => setWalletPicker(null)}>
           <div className="w-full max-w-sm border-2 border-mint bg-pane p-5 shadow-hardsm"
                onClick={(e) => e.stopPropagation()}>
-            <div className="mb-1 font-mono text-[11px] uppercase tracking-[0.12em] text-mint">Choose a wallet</div>
+            <div className="mb-1 font-mono text-[13px] uppercase tracking-[0.12em] text-mint">Choose a wallet</div>
             <p className="mb-3 text-xs text-fog">More than one wallet extension is installed. Pick the one holding the account you want to connect.</p>
             <div className="flex flex-col gap-1.5">
               {walletPicker.map((p) => (
                 <button key={p.uuid} onClick={() => { void onConnect(p); }}
-                  className="flex items-center gap-2.5 border-2 border-line bg-ink px-3 py-2 text-left font-mono text-[12px] uppercase text-paper transition-colors hover:border-mint hover:text-mint">
+                  className="flex items-center gap-2.5 border-2 border-line bg-ink px-3 py-2 text-left font-mono text-[14px] uppercase text-paper transition-colors hover:border-mint hover:text-mint">
                   {p.icon && <img src={p.icon} alt="" className="h-5 w-5" />}
                   {p.name}
                 </button>
               ))}
             </div>
             <button onClick={() => setWalletPicker(null)}
-              className="mt-3 font-mono text-[10.5px] uppercase text-fog hover:text-paper">
+              className="mt-3 font-mono text-[13px] uppercase text-fog hover:text-paper">
               cancel
             </button>
           </div>
@@ -707,7 +732,7 @@ export function AppDemo() {
       <div className="mx-auto flex h-full max-w-[1500px] flex-col">
         {/* top bar: tabs · assets · venue · wallet */}
         <div className="mb-2.5 flex flex-wrap items-center gap-2.5 border-2 border-line bg-pane px-2.5 py-2">
-          <div className="flex gap-1 font-mono text-[12px] uppercase tracking-[0.06em]">
+          <div className="flex gap-1 font-mono text-[14px] uppercase tracking-[0.06em]">
             {([["trade", "Trade desk"], ["console", "Console"]] as const).map(([id, label]) => (
               <button key={id} onClick={() => setView(id)}
                 className={`border-2 px-3.5 py-1.5 transition-colors ${
@@ -728,12 +753,12 @@ export function AppDemo() {
                 <div key={a.symbol} className="flex shrink-0 items-center gap-1.5">
                   {newGroup && <span className="h-5 w-px bg-line/70" />}
                   <button onClick={() => onSelectAsset(a.symbol)}
-                    className={`shrink-0 border px-2.5 py-1.5 font-mono text-[12.5px] transition-colors ${
+                    className={`shrink-0 border px-2.5 py-1.5 font-mono text-[14.5px] transition-colors ${
                       on ? "border-mint text-mint" : a.live ? "border-transparent text-paper hover:border-line" : "border-transparent text-fog"
                     }`}>
                     <span className="font-bold">{a.symbol}</span>
-                    {on && <span className="ml-1.5 text-[11px] text-mint/70">{fmtUsd(a.spot)} · IV {fmtPct(a.iv, 0)}</span>}
-                    {!a.live && <span className="ml-1 text-[9px] uppercase tracking-wide text-amber">soon</span>}
+                    {on && <span className="ml-1.5 text-[13px] text-mint/70">{fmtUsd(a.spot)} · IV {fmtPct(a.iv, 0)}</span>}
+                    {!a.live && <span className="ml-1 text-[11.5px] uppercase tracking-wide text-amber">soon</span>}
                   </button>
                 </div>
               );
@@ -745,7 +770,7 @@ export function AppDemo() {
               window.location.reload();
             }}
             title="Switch network"
-            className={`border-2 px-2 py-1.5 font-mono text-[11px] font-bold uppercase focus:outline-none ${
+            className={`border-2 px-2 py-1.5 font-mono text-[13px] font-bold uppercase focus:outline-none ${
               onMainnet ? "border-rose bg-rose/10 text-rose" : "border-line bg-ink text-mint"
             }`}>
             <option value="demo">Demo · testnet</option>
@@ -755,31 +780,31 @@ export function AppDemo() {
             <button
               onClick={() => { if (wallet) setWalletMenu((v) => !v); else void onConnect(); }}
               disabled={!!connecting}
-              className={`flex items-center gap-1.5 border-2 px-3 py-1.5 font-mono text-[11.5px] uppercase transition-colors ${
+              className={`flex items-center gap-1.5 border-2 px-3 py-1.5 font-mono text-[13.5px] uppercase transition-colors ${
                 wallet ? "border-mint text-mint" : "border-paper bg-accent font-bold text-ink shadow-hardsm"
               } disabled:opacity-70`}>
               {connecting ? "connecting…" : wallet ? shortAddr(wallet.address) : "Connect wallet"}
-              {wallet && !connecting && <span className="text-[9px] leading-none">▾</span>}
+              {wallet && !connecting && <span className="text-[11.5px] leading-none">▾</span>}
             </button>
             {wallet && walletMenu && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setWalletMenu(false)} />
                 <div className="absolute right-0 z-50 mt-1 w-56 border-2 border-mint bg-pane shadow-hardsm">
                   <div className="border-b border-line px-3 py-2">
-                    <div className="font-mono text-[9px] uppercase tracking-[0.1em] text-fog">connected</div>
-                    <div className="mt-0.5 break-all font-mono text-[10px] text-paper">{wallet.address}</div>
+                    <div className="font-mono text-[11.5px] uppercase tracking-[0.1em] text-fog">connected</div>
+                    <div className="mt-0.5 break-all font-mono text-[12.5px] text-paper">{wallet.address}</div>
                   </div>
                   <button
                     onClick={() => { try { void navigator.clipboard?.writeText(wallet.address); setCopied(true); setTimeout(() => setCopied(false), 1200); } catch { /* ignore */ } }}
-                    className="block w-full px-3 py-2 text-left font-mono text-[10.5px] uppercase text-paper transition-colors hover:bg-ink hover:text-mint">
+                    className="block w-full px-3 py-2 text-left font-mono text-[13px] uppercase text-paper transition-colors hover:bg-ink hover:text-mint">
                     {copied ? "copied ✓" : "copy address"}
                   </button>
                   <button onClick={switchWallet}
-                    className="block w-full px-3 py-2 text-left font-mono text-[10.5px] uppercase text-paper transition-colors hover:bg-ink hover:text-mint">
+                    className="block w-full px-3 py-2 text-left font-mono text-[13px] uppercase text-paper transition-colors hover:bg-ink hover:text-mint">
                     switch wallet
                   </button>
                   <button onClick={disconnectWallet}
-                    className="block w-full border-t border-line px-3 py-2 text-left font-mono text-[10.5px] uppercase text-rose transition-colors hover:bg-rose hover:text-ink">
+                    className="block w-full border-t border-line px-3 py-2 text-left font-mono text-[13px] uppercase text-rose transition-colors hover:bg-rose hover:text-ink">
                     disconnect
                   </button>
                 </div>
@@ -787,11 +812,11 @@ export function AppDemo() {
             )}
           </div>
           {onMainnet ? (
-            <span className="border-2 border-rose bg-rose/10 px-1.5 py-1 font-mono text-[9px] font-bold uppercase text-rose">
+            <span className="border-2 border-rose bg-rose/10 px-1.5 py-1 font-mono text-[11.5px] font-bold uppercase text-rose">
               ● real funds
             </span>
           ) : (
-            <span className="border border-amber px-1.5 py-1 font-mono text-[9px] uppercase text-amber">demo pricing</span>
+            <span className="border border-amber px-1.5 py-1 font-mono text-[11.5px] uppercase text-amber">demo pricing</span>
           )}
         </div>
 
@@ -802,7 +827,7 @@ export function AppDemo() {
         )}
         {/* mainnet, connected, but this wallet isn't set up / whitelisted */}
         {onMainnet && wallet && !connecting && hostedSt === null && (
-          <div className="mb-2 border-2 border-amber bg-pane px-3 py-2 font-mono text-[11px] text-amber">
+          <div className="mb-2 border-2 border-amber bg-pane px-3 py-2 font-mono text-[13px] text-amber">
             No agent on this wallet. Deploy a strategy → 24/7 hosted to set one up.
             Mainnet is whitelist-gated — if setup is blocked, your wallet isn't approved yet.
           </div>
@@ -810,7 +835,7 @@ export function AppDemo() {
 
         {/* wallet-sync progress strip */}
         {connecting && (
-          <div className="mb-2 flex items-center gap-2 border-2 border-mint bg-pane px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-mint">
+          <div className="mb-2 flex items-center gap-2 border-2 border-mint bg-pane px-3 py-1.5 font-mono text-[13px] uppercase tracking-[0.08em] text-mint">
             <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-mint" />
             {connecting}
             <span className="flex-1" />
@@ -846,11 +871,11 @@ export function AppDemo() {
                 )}
               </div>
               <button onClick={() => setFeedOpen(true)}
-                className="flex shrink-0 items-center gap-2 border-2 border-line bg-pane px-3 py-1.5 text-left font-mono text-[11px] transition-colors hover:border-fog">
+                className="flex shrink-0 items-center gap-2 border-2 border-line bg-pane px-3 py-1.5 text-left font-mono text-[13px] transition-colors hover:border-fog">
                 <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-mint" />
                 <span className="text-fog">agent</span>
                 <span className="text-paper">{positions.length} open</span>
-                {suggestion && <span className="border border-amber px-1 text-[9.5px] uppercase text-amber">1 suggestion</span>}
+                {suggestion && <span className="border border-amber px-1 text-[12px] uppercase text-amber">1 suggestion</span>}
                 <span className="min-w-0 flex-1 truncate text-fog">
                   {lastFeed ? `${lastFeed.ts} ${lastFeed.text}` : "the loop starts when you deploy"}
                 </span>
@@ -866,17 +891,6 @@ export function AppDemo() {
               {pendingPlan && (
                 <TuneCard plan={pendingPlan} onChange={setPendingPlan} />
               )}
-              {onMainnet && hostedSt?.enrolled && pendingPlan && (
-                <div className="flex items-center gap-2 border-2 border-mint bg-ink px-3 py-2">
-                  <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-mint">
-                    ready to deploy · {pendingPlan.label}
-                  </span>
-                  <button onClick={() => void deployPlan()} disabled={deploying}
-                    className="shrink-0 border-2 border-paper bg-accent px-3 py-1 font-mono text-[11px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-y-px disabled:opacity-60">
-                    {deploying ? "…" : "Deploy to agent · dry-run"}
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -891,18 +905,8 @@ export function AppDemo() {
         </Modal>
       )}
       {manage === "hosted" && wallet && (
-        <Modal title="Run it 24/7 · hosted pilot" onClose={() => setManage(null)}>
+        <Modal title="Set up your 24/7 agent · one time" onClose={() => setManage(null)}>
           <HostedPanel ownerEoa={wallet.address} />
-        </Modal>
-      )}
-      {manage === "browser" && wallet && ticket && (
-        <Modal title="Place it from this browser" onClose={() => setManage(null)}>
-          <TestnetPanel q={ticket} qty={ticketQty} ownerEoa={wallet.address} />
-        </Modal>
-      )}
-      {manage === "self" && ticket && (
-        <Modal title="Self-host the agent" onClose={() => setManage(null)}>
-          <RunItYourself q={ticket} qty={ticketQty} mode={venueMode} />
         </Modal>
       )}
     </main>

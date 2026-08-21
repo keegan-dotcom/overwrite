@@ -10,8 +10,8 @@ export default {
         pane: "#101614",      // panel
         line: "#1E2A26",      // faint rule
         darkline: "#1E2A26",
-        fog: "#8FA89C",       // muted
-        dfog: "#8FA89C",
+        fog: "#AEC5B9",       // muted (lightened for readable contrast on black)
+        dfog: "#AEC5B9",
         accent: "#3DFFA8",    // mint
         market: "#3DFFA8",
         mint: "#3DFFA8",

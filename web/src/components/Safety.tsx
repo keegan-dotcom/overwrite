@@ -40,11 +40,11 @@ export function Safety() {
         {rails.map((r, i) => (
           <Reveal key={r.title} delay={(i % 3) as 0 | 1 | 2} className="h-full">
             <div className={`h-full border-line p-6 transition-colors hover:bg-cream ${i % 3 !== 2 ? "lg:border-r-2" : ""} ${i < 3 ? "lg:border-b-2" : ""} ${i % 2 === 0 ? "max-lg:md:border-r-2" : ""} max-lg:border-b-2 lg:max-lg:border-b-0`}>
-              <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-accent">
+              <p className="font-mono text-[13px] font-bold uppercase tracking-[0.16em] text-accent">
                 Control {String(i + 1).padStart(2, "0")}
               </p>
               <h3 className="mt-2 font-display text-xl uppercase">{r.title}</h3>
-              <p className="mt-3 font-serif text-[15px] leading-relaxed text-paper/75">{r.body}</p>
+              <p className="mt-3 font-serif text-[16.5px] leading-relaxed text-paper/75">{r.body}</p>
             </div>
           </Reveal>
         ))}

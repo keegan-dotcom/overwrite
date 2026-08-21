@@ -43,16 +43,16 @@ export function Products() {
         {CARDS.map((c, i) => (
           <Reveal key={c.title} delay={i as 0 | 1 | 2} className="h-full">
             <div className={`flex h-full flex-col border-2 p-6 ${i === 0 ? "border-accent shadow-hard" : "border-paper"}`}>
-              <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-accent">
+              <p className="font-mono text-[13px] font-bold uppercase tracking-[0.16em] text-accent">
                 {c.kicker}
               </p>
               <h3 className="mt-2 font-display text-3xl uppercase">{c.title}</h3>
-              <p className="mt-4 font-serif text-[15px] leading-relaxed text-paper/80">{c.body}</p>
+              <p className="mt-4 font-serif text-[16.5px] leading-relaxed text-paper/95">{c.body}</p>
               <div className="mt-auto pt-6">
                 {"to" in c.cta ? (
                   <Link
                     to={c.cta.to!}
-                    className={`inline-block border-2 px-5 py-2.5 font-mono text-[13px] font-bold uppercase tracking-[0.06em] transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 ${
+                    className={`inline-block border-2 px-5 py-2.5 font-mono text-[14.5px] font-bold uppercase tracking-[0.06em] transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5 ${
                       c.cta.primary ? "border-paper bg-accent text-ink shadow-hardsm" : "border-paper text-paper"
                     }`}
                   >
@@ -63,12 +63,12 @@ export function Products() {
                     href={c.cta.href}
                     target={c.cta.href!.startsWith("http") ? "_blank" : undefined}
                     rel="noreferrer"
-                    className="inline-block border-2 border-paper px-5 py-2.5 font-mono text-[13px] uppercase tracking-[0.06em] text-paper transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
+                    className="inline-block border-2 border-paper px-5 py-2.5 font-mono text-[14.5px] uppercase tracking-[0.06em] text-paper transition-transform hover:-translate-x-0.5 hover:-translate-y-0.5"
                   >
                     {c.cta.label}
                   </a>
                 )}
-                <p className="mt-3 font-mono text-[10.5px] uppercase tracking-[0.1em] text-fog">{c.foot}</p>
+                <p className="mt-3 font-mono text-[13px] uppercase tracking-[0.1em] text-fog">{c.foot}</p>
               </div>
             </div>
           </Reveal>

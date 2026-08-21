@@ -112,26 +112,26 @@ export function TestnetPanel({
     <div className="border-2 border-amber bg-pane">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div>
-          <div className="font-mono text-[11px] uppercase tracking-[0.14em] text-amber">
+          <div className="font-mono text-[13px] uppercase tracking-[0.14em] text-amber">
             Go live on testnet · from this page
           </div>
-          <div className="font-serif text-[12.5px] leading-snug text-fog">
+          <div className="font-serif text-[14.5px] leading-snug text-fog">
             Real order, fake money. Session key generated in your browser, one
             MetaMask signature, then this trade rests on Derive's testnet book.
           </div>
         </div>
         {step === "idle" || step === "error" ? (
           <button onClick={start}
-            className="border-2 border-paper bg-amber px-3.5 py-1.5 font-mono text-[12px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px">
+            className="border-2 border-paper bg-amber px-3.5 py-1.5 font-mono text-[14px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px">
             Start
           </button>
         ) : step === "ready" ? (
           <button onClick={place}
-            className="border-2 border-paper bg-accent px-3.5 py-1.5 font-mono text-[12px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px">
+            className="border-2 border-paper bg-accent px-3.5 py-1.5 font-mono text-[14px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px">
             Place order
           </button>
         ) : (
-          <span className="font-mono text-[11px] uppercase text-fog">
+          <span className="font-mono text-[13px] uppercase text-fog">
             {step === "done" ? "✓ resting on the book" : "working…"}
           </span>
         )}
@@ -139,50 +139,50 @@ export function TestnetPanel({
 
       <div className="space-y-2 border-t-2 border-line px-4 py-3">
         <label className="block">
-          <span className="font-mono text-[10.5px] uppercase tracking-[0.1em] text-fog">
+          <span className="font-mono text-[13px] uppercase tracking-[0.1em] text-fog">
             Your Derive wallet — the "Wallet" address at testnet.derive.xyz → Developers (NOT "Signer"/your MetaMask address)
           </span>
           <input
             value={deriveWallet}
             onChange={(e) => setDeriveWallet(e.target.value.trim())}
             placeholder="0x…"
-            className="mt-1 w-full border-2 border-line bg-ink px-3 py-1.5 font-mono text-[12.5px] text-paper placeholder:text-fog/50 focus:border-amber focus:outline-none"
+            className="mt-1 w-full border-2 border-line bg-ink px-3 py-1.5 font-mono text-[14.5px] text-paper placeholder:text-fog/75 focus:border-amber focus:outline-none"
           />
         </label>
 
         {instrument && (
-          <div className="font-mono text-[11.5px] text-paper">
+          <div className="font-mono text-[13.5px] text-paper">
             live match: <span className="text-mint">{instrument.instrument_name}</span>
             {livePrice && <> · quoting <span className="text-mint">{livePrice}</span> (post-only)</>}
           </div>
         )}
 
         {log.length > 0 && (
-          <div className="space-y-1 border border-line bg-ink px-3 py-2 font-mono text-[11px] leading-snug text-fog">
+          <div className="space-y-1 border border-line bg-ink px-3 py-2 font-mono text-[13px] leading-snug text-fog">
             {log.map((l, i) => <div key={i}>· {l}</div>)}
           </div>
         )}
 
         {placed && (
-          <div className="border-2 border-mint bg-ink px-3 py-2 font-mono text-[12px] text-mint">
+          <div className="border-2 border-mint bg-ink px-3 py-2 font-mono text-[14px] text-mint">
             ✓ REAL testnet order resting: SELL {placed.instrument_name} · id {placed.order_id.slice(0, 16)}…
-            <span className="block text-[10.5px] text-fog">check it at testnet.derive.xyz → open orders</span>
+            <span className="block text-[13px] text-fog">check it at testnet.derive.xyz → open orders</span>
           </div>
         )}
 
         {err && (
-          <div className="border border-rose px-3 py-2 font-mono text-[11.5px] text-rose">
+          <div className="border border-rose px-3 py-2 font-mono text-[13.5px] text-rose">
             {err}
           </div>
         )}
 
-        <div className="flex items-center justify-between font-serif text-[11.5px] italic text-fog">
+        <div className="flex items-center justify-between font-serif text-[13.5px] italic text-fog">
           <span>
             The key in this browser can trade this account and nothing else -
             revoke it any time at testnet.derive.xyz → Developers.
           </span>
           <button onClick={() => { clearSessionKey(); say("local session key cleared"); }}
-            className="ml-3 shrink-0 border border-line px-2 py-0.5 font-mono text-[10px] uppercase not-italic text-fog hover:border-fog">
+            className="ml-3 shrink-0 border border-line px-2 py-0.5 font-mono text-[12.5px] uppercase not-italic text-fog hover:border-fog">
             forget key
           </button>
         </div>

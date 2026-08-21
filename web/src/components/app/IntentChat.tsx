@@ -27,14 +27,14 @@ export function IntentChat({
   return (
     <div className="flex h-full min-h-[420px] flex-col border-2 border-line bg-pane">
       <div className="border-b-2 border-line px-4 py-2.5">
-        <div className="font-mono text-[11px] uppercase tracking-[0.14em] text-fog">
+        <div className="font-mono text-[13px] uppercase tracking-[0.14em] text-fog">
           Tell the agent what you want
         </div>
-        <div className="font-serif text-[12.5px] italic text-fog">
-          No greeks needed. A good ask: <span className="not-italic font-mono text-[11px]">asset + goal + limits + horizon</span>
+        <div className="font-serif text-[14.5px] italic text-fog">
+          No greeks needed. A good ask: <span className="not-italic font-mono text-[13px]">asset + goal + limits + horizon</span>
         </div>
         {defaultsNote && (
-          <div className="mt-1 inline-block border border-mint/40 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-mint">
+          <div className="mt-1 inline-block border border-mint/40 px-1.5 py-0.5 font-mono text-[12.5px] uppercase tracking-[0.08em] text-mint">
             remembers you: {defaultsNote}
           </div>
         )}
@@ -51,13 +51,13 @@ export function IntentChat({
               }`}
             >
               {m.role === "agent" && (
-                <div className="mb-0.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-mint">
+                <div className="mb-0.5 font-mono text-[12px] uppercase tracking-[0.14em] text-mint">
                   overwrite agent
                 </div>
               )}
-              <div className="font-serif text-[13.5px] leading-snug">{m.text}</div>
+              <div className="font-serif text-[15px] leading-snug">{m.text}</div>
               {m.bullets && m.bullets.length > 0 && (
-                <ul className="mt-1.5 space-y-0.5 font-mono text-[11.5px] text-fog">
+                <ul className="mt-1.5 space-y-0.5 font-mono text-[13.5px] text-fog">
                   {m.bullets.map((b, j) => (
                     <li key={j}>· {b}</li>
                   ))}
@@ -68,7 +68,7 @@ export function IntentChat({
         ))}
         {thinking && (
           <div className="flex justify-start">
-            <div className="border-2 border-mint/50 bg-ink px-3 py-2 font-mono text-[12px] text-mint">
+            <div className="border-2 border-mint/50 bg-ink px-3 py-2 font-mono text-[14px] text-mint">
               structuring<span className="animate-pulse">…</span>
             </div>
           </div>
@@ -81,7 +81,7 @@ export function IntentChat({
             <button
               key={p}
               onClick={() => onSend(p)}
-              className="border border-line px-2 py-1 text-left font-mono text-[10.5px] text-fog transition-colors hover:border-mint hover:text-mint"
+              className="border border-line px-2 py-1 text-left font-mono text-[13px] text-fog transition-colors hover:border-mint hover:text-mint"
             >
               {p}
             </button>
@@ -95,11 +95,11 @@ export function IntentChat({
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
           placeholder='"ETH · 12% yield · stop at 15% · monthly"'
-          className="min-w-0 flex-1 border-2 border-line bg-ink px-3 py-2 font-mono text-[13px] text-paper placeholder:text-fog/60 focus:border-mint focus:outline-none"
+          className="min-w-0 flex-1 border-2 border-line bg-ink px-3 py-2 font-mono text-[14.5px] text-paper placeholder:text-fog/75 focus:border-mint focus:outline-none"
         />
         <button
           onClick={submit}
-          className="border-2 border-paper bg-accent px-4 font-mono text-[13px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px"
+          className="border-2 border-paper bg-accent px-4 font-mono text-[14.5px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px"
         >
           Send
         </button>

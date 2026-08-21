@@ -61,7 +61,7 @@ export function FAQ() {
                 style={{ gridTemplateRows: open === i ? "1fr" : "0fr" }}
               >
                 <div className="overflow-hidden">
-                  <p className="px-6 pb-6 font-serif text-[15px] leading-relaxed text-paper/75">{f.a}</p>
+                  <p className="px-6 pb-6 font-serif text-[16.5px] leading-relaxed text-paper/75">{f.a}</p>
                 </div>
               </div>
             </div>

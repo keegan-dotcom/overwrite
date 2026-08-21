@@ -18,7 +18,7 @@ export function SectionHead({
   return (
     <Reveal>
       <div className={`rule-double pt-5 ${dark ? "border-paper" : ""}`}>
-        <div className={`flex items-baseline gap-4 font-mono text-[12px] uppercase tracking-[0.2em] ${dark ? "text-dfog" : "text-fog"}`}>
+        <div className={`flex items-baseline gap-4 font-mono text-[14px] uppercase tracking-[0.2em] ${dark ? "text-dfog" : "text-fog"}`}>
           <span className={`font-bold ${dark ? "text-accent" : "text-accent"}`}>№ {no}</span>
           <span>{kicker}</span>
         </div>

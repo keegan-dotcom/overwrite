@@ -43,8 +43,8 @@ export function HowItWorks() {
               <div className="group flex h-full flex-col bg-ink p-6 transition-colors hover:bg-cream">
                 <p className="font-display text-5xl text-line transition-colors group-hover:text-accent">{s.n}</p>
                 <h3 className="mt-3 font-display text-2xl uppercase">{s.title}</h3>
-                <p className="mt-3 flex-1 font-serif text-[15px] leading-relaxed text-paper/75">{s.body}</p>
-                <p className="mt-5 border-t border-line pt-3 font-mono text-[12px] text-mint">
+                <p className="mt-3 flex-1 font-serif text-[16.5px] leading-relaxed text-paper/75">{s.body}</p>
+                <p className="mt-5 border-t border-line pt-3 font-mono text-[14px] text-mint">
                   {s.mono}
                 </p>
               </div>

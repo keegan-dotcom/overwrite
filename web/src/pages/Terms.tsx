@@ -90,14 +90,14 @@ export function Terms() {
     <main className="bg-ink pt-[58px]">
       <div className="mx-auto max-w-3xl px-5 py-16">
         <div className="rule-double pt-5">
-          <div className="flex items-baseline gap-4 font-mono text-[12px] uppercase tracking-[0.2em] text-fog">
+          <div className="flex items-baseline gap-4 font-mono text-[14px] uppercase tracking-[0.2em] text-fog">
             <span className="font-bold text-mint">Legal</span>
             <span>Effective 2026-08-19</span>
           </div>
           <h1 className="mt-4 font-display text-4xl uppercase leading-[0.98] text-paper sm:text-5xl">
             Terms of use<span className="text-accent">.</span>
           </h1>
-          <p className="mt-4 font-serif text-[15px] leading-relaxed text-paper/85">
+          <p className="mt-4 font-serif text-[16.5px] leading-relaxed text-paper/95">
             The short version: this is a testnet experiment with fake money.
             Use it at your own risk, keep your keys safe, expect bugs, and
             don't treat anything here as financial advice. The long version
@@ -110,11 +110,11 @@ export function Terms() {
         <div className="mt-10 space-y-8">
           {SECTIONS.map((s) => (
             <section key={s.title}>
-              <h2 className="border-b border-line pb-1.5 font-mono text-[13px] font-bold uppercase tracking-[0.08em] text-paper">
+              <h2 className="border-b border-line pb-1.5 font-mono text-[14.5px] font-bold uppercase tracking-[0.08em] text-paper">
                 {s.title}
               </h2>
               {s.body.map((p, i) => (
-                <p key={i} className="mt-2.5 font-serif text-[14px] leading-relaxed text-paper/80">
+                <p key={i} className="mt-2.5 font-serif text-[15.5px] leading-relaxed text-paper/95">
                   {p}
                 </p>
               ))}
@@ -122,7 +122,7 @@ export function Terms() {
           ))}
         </div>
 
-        <p className="mt-12 border-t-2 border-line pt-4 font-mono text-[11px] uppercase leading-relaxed tracking-[0.06em] text-fog">
+        <p className="mt-12 border-t-2 border-line pt-4 font-mono text-[13px] uppercase leading-relaxed tracking-[0.06em] text-fog">
           Selby Studio · overwrite.pro · contact via{" "}
           <a href="https://github.com/keegan-dotcom/overwrite" target="_blank" rel="noreferrer" className="text-mint underline">GitHub</a>
         </p>

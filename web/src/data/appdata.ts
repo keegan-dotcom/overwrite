@@ -67,6 +67,7 @@ export type Strategy = {
   fitsWhen: string;
   risk: "conservative" | "moderate" | "spicy";
   proName: string; // the real options name, shown small
+  degen?: boolean; // hidden behind the degen-mode toggle
   quote: (a: Asset, opts?: Partial<IntentParams>) => Quote;
 };
 
@@ -275,7 +276,153 @@ function neutralQuote(a: Asset, o: Partial<IntentParams> = {}): Quote {
   };
 }
 
+/* ---- direct directional trades: just buy/sell what you want -------------- */
+
+function longCallQuote(a: Asset, o: Partial<IntentParams> = {}): Quote {
+  const p = { ...DEF, ...o, dte: o.dte ?? 45 };
+  const t = p.dte / 365;
+  // explicit strike wins; else ~40Δ (a balanced OTM call, real leverage w/o lotto odds)
+  const k = roundStrike(p.capTarget ?? strikeForDelta(a.spot, 0.4, a.iv, t), a);
+  const prem = callPrice(a.spot, k, a.iv, t);
+  const be = k + prem;
+  return {
+    strategyId: "call", assetSymbol: a.symbol, title: `Long Calls · ${a.symbol}`,
+    legs: [{ kind: "call", side: "long", strike: k, premium: prem, qty: 1 }],
+    assetQty: 0, dte: p.dte,
+    incomeMonthly: -prem, incomeAnnualPct: 0, capPrice: null, floorPrice: null,
+    stopLossPct: p.stopLossPct,
+    headline: `Bullish on ${a.symbol}: uncapped upside past ${fmtUsd(be)}, and the most you can lose is the ${fmtUsd(prem, 2)}/contract you pay.`,
+    tradeoffs: [
+      `You pay ${fmtUsd(prem, 2)}/contract up front — that is your entire risk, however far ${a.symbol} falls.`,
+      `You start profiting above ${fmtUsd(be)} (strike ${fmtUsd(k)} + premium) at ${p.dte}d expiry.`,
+      `Time decay works against a long option: if ${a.symbol} sits still, it bleeds value each day.`,
+      "This is a directional bet, not income — no premium collected, no yield.",
+    ],
+    managed: [
+      "Buys at a fair mid, never chasing the offer",
+      "Takes profit at your target (say \"take profit at 2x\")",
+      "Rolls up/out near expiry if you want to stay long",
+    ],
+  };
+}
+
+function longPutQuote(a: Asset, o: Partial<IntentParams> = {}): Quote {
+  const p = { ...DEF, ...o, dte: o.dte ?? 45 };
+  const t = p.dte / 365;
+  const k = roundStrike(p.capTarget ?? strikeForDelta(a.spot, 0.6, a.iv, t), a); // ~40Δ put
+  const prem = putPrice(a.spot, k, a.iv, t);
+  const be = k - prem;
+  return {
+    strategyId: "put", assetSymbol: a.symbol, title: `Long Puts · ${a.symbol}`,
+    legs: [{ kind: "put", side: "long", strike: k, premium: prem, qty: 1 }],
+    assetQty: 0, dte: p.dte,
+    incomeMonthly: -prem, incomeAnnualPct: 0, capPrice: null, floorPrice: null,
+    stopLossPct: p.stopLossPct,
+    headline: `Bearish on ${a.symbol}: profit as it falls below ${fmtUsd(be)}, risk capped at the ${fmtUsd(prem, 2)}/contract you pay.`,
+    tradeoffs: [
+      `Max loss is the ${fmtUsd(prem, 2)}/contract premium — no short-squeeze, no liquidation.`,
+      `You profit below ${fmtUsd(be)} (strike ${fmtUsd(k)} − premium) at ${p.dte}d expiry.`,
+      `If ${a.symbol} rises or stays flat, the put decays toward zero.`,
+    ],
+    managed: [
+      "Buys at a fair mid, never lifting the offer",
+      "Takes profit as it goes in-the-money",
+      "Closes the put if your thesis is invalidated",
+    ],
+  };
+}
+
+/* ---- degen menu (behind the toggle) ------------------------------------- */
+
+function lottoQuote(a: Asset, o: Partial<IntentParams> = {}): Quote {
+  const p = { ...DEF, ...o, dte: o.dte ?? 30 };
+  const t = p.dte / 365;
+  const k = roundStrike(p.capTarget ?? strikeForDelta(a.spot, 0.12, a.iv, t), a); // far OTM
+  const prem = callPrice(a.spot, k, a.iv, t);
+  return {
+    strategyId: "lotto", assetSymbol: a.symbol, title: `Lotto Calls · ${a.symbol}`,
+    legs: [{ kind: "call", side: "long", strike: k, premium: prem, qty: 1 }],
+    assetQty: 0, dte: p.dte,
+    incomeMonthly: -prem, incomeAnnualPct: 0, capPrice: null, floorPrice: null,
+    stopLossPct: p.stopLossPct,
+    headline: `Moonshot: cheap far-OTM ${a.symbol} calls at ${fmtUsd(k)}. Tiny cost, huge payoff if it rips — most likely expires worthless.`,
+    tradeoffs: [
+      `Very low odds by design: ${a.symbol} has to blow past ${fmtUsd(k)} for this to pay.`,
+      `You will usually lose the whole ${fmtUsd(prem, 2)}/contract — treat it as a lottery ticket.`,
+      "Only size this with money you're fully OK writing to zero.",
+    ],
+    managed: ["Buys the cheapest fair strike near your target", "Auto-sells into any spike so a win doesn't round-trip to zero"],
+  };
+}
+
+function leveragePerpQuote(a: Asset, o: Partial<IntentParams>, dir: "long" | "short"): Quote {
+  const p = { ...DEF, ...o };
+  const lev = 3; // demo default; adjustable in chat
+  const signed = dir === "long" ? lev : -lev;
+  const stop = p.stopLossPct ?? 0.4;
+  return {
+    strategyId: dir === "long" ? "perp_long" : "perp_short",
+    assetSymbol: a.symbol, title: `${lev}× ${dir === "long" ? "Long" : "Short"} · ${a.symbol}`,
+    legs: [], assetQty: signed, dte: p.dte,
+    incomeMonthly: 0, incomeAnnualPct: 0, capPrice: null, floorPrice: null,
+    stopLossPct: stop,
+    hedgeNote: `${dir === "long" ? "LONG" : "SHORT"} ${a.symbol} PERP ×${lev} (leverage)`,
+    headline: `${lev}× ${dir} ${a.symbol} via perps — every 1% move in ${a.symbol} moves your position ~${lev}%.`,
+    tradeoffs: [
+      `Leverage cuts both ways: an adverse move of ~${(100 / lev).toFixed(0)}% can liquidate the whole position.`,
+      "You pay or earn funding every hour to hold the perp.",
+      "NOT defined-risk — losses can exceed a plain spot position. Size small.",
+      `Auto-close set at ${(stop * 100).toFixed(0)}% to try to exit before liquidation (a fast wick can still blow through it).`,
+    ],
+    managed: [
+      `Caps notional so leverage stays ~${lev}× and can't creep higher`,
+      `Auto-closes at your ${(stop * 100).toFixed(0)}% stop`,
+      "Watches funding + margin every cycle and warns before a liquidation zone",
+    ],
+  };
+}
+
+function shortStrangleQuote(a: Asset, o: Partial<IntentParams> = {}): Quote {
+  const p = { ...DEF, ...o, dte: o.dte ?? 21 };
+  const t = p.dte / 365;
+  const kCall = roundStrike(strikeForDelta(a.spot, 0.2, a.iv, t), a);
+  const kPut = roundStrike(strikeForDelta(a.spot, 0.8, a.iv, t), a);
+  const cPrem = callPrice(a.spot, kCall, a.iv, t);
+  const pPrem = putPrice(a.spot, kPut, a.iv, t);
+  const credit = cPrem + pPrem;
+  const yld = annualYield(credit, a.spot, p.dte);
+  return {
+    strategyId: "strangle", assetSymbol: a.symbol, title: `Sell Premium · ${a.symbol}`,
+    legs: [
+      { kind: "call", side: "short", strike: kCall, premium: cPrem, qty: 1 },
+      { kind: "put", side: "short", strike: kPut, premium: pPrem, qty: 1 },
+    ],
+    assetQty: 0, dte: p.dte,
+    incomeMonthly: credit, incomeAnnualPct: yld, capPrice: kCall, floorPrice: kPut,
+    stopLossPct: p.stopLossPct ?? 0.5,
+    headline: `Pocket ~${fmtPct(yld, 0)}/yr selling a ${fmtUsd(kPut)}–${fmtUsd(kCall)} strangle on ${a.symbol}. You win if it stays in the range — you're exposed if it breaks out hard.`,
+    tradeoffs: [
+      `You collect ${fmtUsd(credit, 2)}/set now, but this is NAKED on both sides — a big move past ${fmtUsd(kCall)} or ${fmtUsd(kPut)} loses more than you took in.`,
+      "Undefined risk: unlike the defined-risk strategies, losses aren't capped. Margin can be called in a violent move.",
+      "Best in calm, range-bound markets; dangerous around catalysts.",
+    ],
+    managed: [
+      "Takes profit at 50% of the credit",
+      "Rolls the tested side out/away for a credit when threatened",
+      "Auto-closes at your stop to cap a runaway loss",
+    ],
+  };
+}
+
 export const STRATEGIES: Strategy[] = [
+  { id: "call", name: "Long Calls", emoji: "📈", proName: "long call",
+    tagline: "Straight bullish bet. Capped risk, uncapped upside.",
+    fitsWhen: "You think it goes up and want leverage with defined risk.",
+    risk: "moderate", quote: longCallQuote },
+  { id: "put", name: "Long Puts", emoji: "🔻", proName: "long put",
+    tagline: "Straight bearish bet. Max loss is the premium.",
+    fitsWhen: "You think it falls and won't risk a short squeeze.",
+    risk: "moderate", quote: longPutQuote },
   { id: "income", name: "Income Mode", emoji: "💰", proName: "covered call",
     tagline: "Earn yield on what you hold. Upside capped past your target.",
     fitsWhen: "You'd happily sell at a higher price anyway.",
@@ -300,6 +447,24 @@ export const STRATEGIES: Strategy[] = [
     tagline: "Pure income, no market view - direction hedged with perps.",
     fitsWhen: "You want the yield without betting on price.",
     risk: "moderate", quote: neutralQuote },
+
+  /* degen mode — riskier, leveraged, or undefined-risk. Hidden by default. */
+  { id: "perp_long", name: "Leverage Long", emoji: "🚀", proName: "3× perp long",
+    tagline: "Amplified long via perps. Liquidation risk.",
+    fitsWhen: "High conviction up and you accept liquidation risk.",
+    risk: "spicy", degen: true, quote: (a, o) => leveragePerpQuote(a, o ?? {}, "long") },
+  { id: "perp_short", name: "Leverage Short", emoji: "🩸", proName: "3× perp short",
+    tagline: "Amplified short via perps. Liquidation risk.",
+    fitsWhen: "High conviction down and you accept liquidation risk.",
+    risk: "spicy", degen: true, quote: (a, o) => leveragePerpQuote(a, o ?? {}, "short") },
+  { id: "lotto", name: "Lotto Calls", emoji: "🎰", proName: "far-OTM long call",
+    tagline: "Cheap moonshot. Usually expires worthless.",
+    fitsWhen: "You want a lottery ticket on a big move.",
+    risk: "spicy", degen: true, quote: lottoQuote },
+  { id: "strangle", name: "Sell Premium", emoji: "🔥", proName: "short strangle (naked)",
+    tagline: "Fat yield selling both sides. Undefined risk.",
+    fitsWhen: "You expect it to stay range-bound and accept naked risk.",
+    risk: "spicy", degen: true, quote: shortStrangleQuote },
 ];
 
 export const strategy = (id: string) => STRATEGIES.find((s) => s.id === id)!;

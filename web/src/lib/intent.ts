@@ -42,6 +42,21 @@ function detectAsset(text: string): string | null {
 
 function detectStrategy(text: string): string {
   const has = (...ws: string[]) => ws.some((w) => text.includes(w));
+  // ---- degen (leverage / naked) — checked first so they win over income ----
+  if (has("leverage long", "leveraged long", "perp long", "long perp", "long with leverage", "3x long", "5x long", "10x long", "degen long", "max long", "ape in", "ape into"))
+    return "perp_long";
+  if (has("leverage short", "leveraged short", "perp short", "short perp", "short with leverage", "3x short", "5x short", "10x short", "degen short"))
+    return "perp_short";
+  if (has("lotto", "moonshot", "yolo", "far otm", "far-otm", "long shot", "longshot", "moon "))
+    return "lotto";
+  if (has("strangle", "straddle", "short strangle", "sell a strangle", "sell both sides", "naked option", "sell naked"))
+    return "strangle";
+  // ---- direct directional buys (the "just buy me calls" path) --------------
+  // a buy-ish verb + the word calls/puts, unless it's clearly a premium-SELL.
+  const buyish = has("buy", "long", "get", "want", "grab", "give me", "load up", "ape", "pick up", "purchase");
+  const sellish = has("covered call", "sell call", "sell a call", "write call", "sell my call", "sell put", "sell a put", "cash secured", "cash-secured", "wheel");
+  if (buyish && !sellish && /\bcalls?\b/.test(text) && !/\bputs?\b/.test(text)) return "call";
+  if (buyish && !sellish && /\bputs?\b/.test(text)) return "put";
   if (has("neutral", "no view", "no direction", "without betting", "not betting", "don't care which way", "dont care which way", "either way", "hedge the delta", "delta hedge", "just the yield", "pure income", "pure yield"))
     return "neutral";
   if (has("collar", "lock the range", "range", "zero cost", "free insurance", "cost nothing", "pay for itself"))
@@ -113,7 +128,9 @@ export function parseIntent(text: string): ParsedIntent {
   // horizon: "weekly", "monthly", "45 days", "2 months"
   const d = t.match(/(\d+)\s*(day|days|d\b)/);
   const mo = t.match(/(\d+)\s*(month|months|mo\b)/);
-  if (t.includes("weekly") || t.includes("every week")) {
+  if (t.includes("long dated") || t.includes("long-dated") || t.includes("leaps") || t.includes("far out") || t.includes("months out")) {
+    params.dte = 120; understood.push("Horizon: long-dated (~120 days)");
+  } else if (t.includes("weekly") || t.includes("every week")) {
     params.dte = 7; understood.push("Cadence: weekly");
   } else if (d) {
     params.dte = Math.max(3, Math.min(120, parseInt(d[1], 10)));

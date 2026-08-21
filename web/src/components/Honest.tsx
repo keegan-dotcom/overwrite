@@ -8,7 +8,7 @@ export function Honest() {
       <div className="mx-auto max-w-6xl px-5">
         <Reveal>
           <div className="rule-double pt-5">
-            <div className="flex items-baseline gap-4 font-mono text-[12px] uppercase tracking-[0.2em] text-fog">
+            <div className="flex items-baseline gap-4 font-mono text-[14px] uppercase tracking-[0.2em] text-fog">
               <span className="font-bold text-amber">№ 04</span>
               <span>Risk &amp; return disclosure</span>
             </div>
@@ -19,7 +19,7 @@ export function Honest() {
         </Reveal>
         <div className="mt-12 grid gap-12 lg:grid-cols-2 lg:items-start">
           <Reveal>
-            <div className="space-y-5 font-serif text-lg leading-relaxed text-paper/85">
+            <div className="space-y-5 font-serif text-lg leading-relaxed text-paper/95">
               <p>
                 Covered calls convert uncertain upside into certain income. In
                 flat and falling markets you come out ahead; in a melt-up you
@@ -41,7 +41,7 @@ export function Honest() {
           </Reveal>
           <Reveal delay={1}>
             <div className="border-2 border-paper bg-ink p-6 shadow-hard">
-              <p className="border-b-2 border-paper pb-2 font-mono text-[12px] font-bold uppercase tracking-[0.16em] text-paper">
+              <p className="border-b-2 border-paper pb-2 font-mono text-[14px] font-bold uppercase tracking-[0.16em] text-paper">
                 What a +25% year costs (0.30Δ, vs buy-and-hold)
               </p>
               <div className="mt-5 space-y-3.5">
@@ -71,7 +71,7 @@ export function Honest() {
                   </div>
                 ))}
               </div>
-              <p className="mt-5 border-t border-line pt-4 font-mono text-[11px] leading-relaxed text-fog">
+              <p className="mt-5 border-t border-line pt-4 font-mono text-[13px] leading-relaxed text-fog">
                 Monte-Carlo, 2,000 paths/cell, VRP calibrated to BXM/BXMD.
                 Crypto's fatter vol premium is why ETH still wins here — and why
                 that edge must be re-checked, not assumed.

@@ -63,10 +63,15 @@ ${strategies}
 
 RULES
 - Always call structure_trade exactly once, even for vague or off-topic messages (pick the closest sensible structure and use "reply" to say why / answer briefly).
+- NEVER refuse a direct buy or sell. If the user just wants to buy calls/puts or go long/short, structure it — do not tell them you only do a fixed menu.
 - symbol: the asset the user names; otherwise their largest holding.
-- strategyId: the single best fit. Earning yield/income on a held asset → income. Getting paid while waiting to buy lower → wheel. Protection with upside kept → shield. Protection paid for by a cap / "costs nothing" → collar. Betting on a fall with capped risk → bear. Yield with NO directional exposure / "don't care which way it goes" / market-neutral → neutral.
+- strategyId: the single best fit.
+  · Direct bullish bet / "buy calls" / "go long" / "I think it moons" → call (a long call, capped risk). Cheap far-OTM moonshot / "lotto" / "yolo" → lotto.
+  · Direct bearish bet / "buy puts" / "I think it dumps" → put (a long put).
+  · Earning yield/income on a held asset → income. Getting paid while waiting to buy lower → wheel. Protection with upside kept → shield. Protection paid for by a cap / "costs nothing" → collar. Bearish with capped risk via a spread → bear. Yield with NO directional exposure → neutral.
+  · DEGEN (leverage / naked): "leverage long" / "ape" / "Nx long" → perp_long; "leverage short" → perp_short; "sell a strangle" / "sell premium both sides" (naked) → strangle. Always name the liquidation / undefined-risk danger in "reply".
 - targetYieldAnnual: decimal (10% → 0.1), only if the user expresses an income/yield goal.
-- capTarget: a PRICE of the underlying. For income/collar it is the "happy to sell above / give up upside past" level; for shield it is the desired floor. Only include if plausible (between 0.3x and 4x spot). Never invent one.
+- capTarget: a PRICE of the underlying. For call/put/lotto it is the STRIKE the user names ("$100 strike", "the 4500s"). For income/collar it is the "happy to sell above" level; for shield it is the floor. Only include if plausible (0.3x–4x spot). Never invent one.
 - stopLossPct: decimal, from "close/bail/exit if down X%".
 - dte: days to expiry if the user implies a horizon (weekly → 7, monthly → 30). Clamp 3-120. Omit if unsaid.
 - FOLLOW-UPS: when a lastIntent JSON is provided, the new message adjusts it. Return the FULL updated intent (e.g. "hit my yield target" → same asset/strategy/yield/stop but drop capTarget; "make the cap 130k" → update capTarget only).

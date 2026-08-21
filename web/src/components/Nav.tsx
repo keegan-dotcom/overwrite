@@ -32,7 +32,7 @@ export function Nav() {
           <Logo />
         </Link>
         {!inApp && (
-          <div className="hidden items-center gap-7 font-mono text-[13px] uppercase tracking-[0.12em] text-fog md:flex">
+          <div className="hidden items-center gap-7 font-mono text-[14.5px] uppercase tracking-[0.12em] text-fog md:flex">
             {links.map((l) => (
               <a key={l.href} href={l.href} className="transition-colors hover:text-paper">
                 {l.label}
@@ -43,14 +43,14 @@ export function Nav() {
         {inApp ? (
           <Link
             to="/"
-            className="border-2 border-line px-3.5 py-1.5 font-mono text-[13px] uppercase tracking-[0.08em] text-fog transition-colors hover:border-fog hover:text-paper"
+            className="border-2 border-line px-3.5 py-1.5 font-mono text-[14.5px] uppercase tracking-[0.08em] text-fog transition-colors hover:border-fog hover:text-paper"
           >
             ← Home
           </Link>
         ) : (
           <Link
             to="/app"
-            className="border-2 border-paper bg-accent px-4 py-1.5 font-mono text-[13px] font-bold uppercase tracking-[0.08em] text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px"
+            className="border-2 border-paper bg-accent px-4 py-1.5 font-mono text-[14.5px] font-bold uppercase tracking-[0.08em] text-ink shadow-hardsm transition-transform hover:-translate-x-px hover:-translate-y-px"
           >
             Launch app
           </Link>

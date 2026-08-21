@@ -49,20 +49,20 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
   }, [lookup, refresh]);
 
   const active = st?.enrolled && st.status === "active";
-  const cell = "px-3 py-1.5 font-mono text-[11.5px]";
-  const th = "px-3 py-1 text-left font-mono text-[9.5px] uppercase tracking-[0.12em] text-fog";
+  const cell = "px-3 py-1.5 font-mono text-[13.5px]";
+  const th = "px-3 py-1 text-left font-mono text-[12px] uppercase tracking-[0.12em] text-fog";
 
   /* ---- empty state: not connected / not enrolled ---------------------- */
   if (!st?.enrolled) {
     return (
       <div className="mx-auto max-w-2xl border-2 border-line bg-pane p-6">
         <div className="font-display text-2xl uppercase text-paper">Your account console</div>
-        <p className="mt-2 font-serif text-[14px] leading-relaxed text-paper/85">
+        <p className="mt-2 font-serif text-[15.5px] leading-relaxed text-paper/95">
           Live positions, open orders, collateral and premium collected — pulled
           straight from your Derive {net} account. It lights up once the 24/7
           agent is running:
         </p>
-        <ol className="mt-3 list-decimal space-y-1.5 pl-5 font-serif text-[13.5px] text-paper/85">
+        <ol className="mt-3 list-decimal space-y-1.5 pl-5 font-serif text-[15px] text-paper/95">
           <li>On the <span className="font-bold text-paper">Trade desk</span>, pick a strategy and hit <span className="font-bold text-mint">Approve &amp; deploy</span>.</li>
           <li>Choose <span className="font-bold text-mint">24/7 hosted</span> and authorize the agent's key (one time, gasless).</li>
           <li>Come back here — every order, fill and cycle shows up live.</li>
@@ -72,18 +72,18 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
             value={input}
             onChange={(e) => setInput(e.target.value.trim())}
             placeholder="Already set up? Paste your Derive wallet 0x…"
-            className="min-w-0 flex-1 border-2 border-line bg-ink px-3 py-2 font-mono text-[12px] text-paper placeholder:text-fog/60 focus:border-mint focus:outline-none"
+            className="min-w-0 flex-1 border-2 border-line bg-ink px-3 py-2 font-mono text-[14px] text-paper placeholder:text-fog/75 focus:border-mint focus:outline-none"
           />
           <button
             onClick={() => void refresh(input)}
             disabled={loading || !/^0x[0-9a-fA-F]{40}$/.test(input)}
-            className="border-2 border-paper bg-accent px-4 py-2 font-mono text-[12px] font-bold uppercase text-ink shadow-hardsm disabled:opacity-50"
+            className="border-2 border-paper bg-accent px-4 py-2 font-mono text-[14px] font-bold uppercase text-ink shadow-hardsm disabled:opacity-50"
           >
             {loading ? "checking…" : "Look up"}
           </button>
         </div>
         {ownerEoa && !loading && (
-          <p className="mt-3 font-mono text-[10.5px] uppercase text-fog">
+          <p className="mt-3 font-mono text-[13px] uppercase text-fog">
             checked {ownerEoa.slice(0, 6)}…{ownerEoa.slice(-4)} — no hosted account yet
           </p>
         )}
@@ -103,13 +103,13 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
           ["Working orders", String(st.open_orders?.length ?? 0)],
         ].map(([k, v]) => (
           <div key={k} className="bg-pane px-3 py-2">
-            <div className="font-mono text-[9.5px] uppercase tracking-[0.12em] text-fog">{k}</div>
+            <div className="font-mono text-[12px] uppercase tracking-[0.12em] text-fog">{k}</div>
             <div className="font-display text-lg leading-tight text-paper">{v}</div>
           </div>
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-2 border-line bg-pane px-3 py-1.5 font-mono text-[10.5px] uppercase">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-2 border-line bg-pane px-3 py-1.5 font-mono text-[13px] uppercase">
         <span className={active ? "text-mint" : "text-amber"}>
           ● {active ? "agent active" : st.status}
         </span>
@@ -126,7 +126,7 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
         <span className="min-w-0 flex-1" />
         {fetchedAt && <span className="text-fog normal-case">as of {fetchedAt.toLocaleTimeString()}</span>}
         <button onClick={() => void refresh(lookup)} disabled={loading}
-          className="border border-line px-2 py-0.5 text-[10px] text-fog hover:border-fog hover:text-paper disabled:opacity-50">
+          className="border border-line px-2 py-0.5 text-[12.5px] text-fog hover:border-fog hover:text-paper disabled:opacity-50">
           {loading ? "…" : "refresh"}
         </button>
       </div>
@@ -137,11 +137,11 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
       <div className="grid gap-2 lg:grid-cols-2">
         {/* positions */}
         <div className="border-2 border-line bg-pane">
-          <div className="border-b-2 border-line px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-fog">
+          <div className="border-b-2 border-line px-3 py-1.5 font-mono text-[12.5px] uppercase tracking-[0.14em] text-fog">
             Positions
           </div>
           {(st.positions?.length ?? 0) === 0 ? (
-            <p className="px-3 py-3 font-serif text-[12.5px] italic text-fog">
+            <p className="px-3 py-3 font-serif text-[14.5px] italic text-fog">
               No open positions — the agent's first order fills on the next taker.
             </p>
           ) : (
@@ -169,11 +169,11 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
 
         {/* open orders */}
         <div className="border-2 border-line bg-pane">
-          <div className="border-b-2 border-line px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-fog">
+          <div className="border-b-2 border-line px-3 py-1.5 font-mono text-[12.5px] uppercase tracking-[0.14em] text-fog">
             Working orders
           </div>
           {(st.open_orders?.length ?? 0) === 0 ? (
-            <p className="px-3 py-3 font-serif text-[12.5px] italic text-fog">
+            <p className="px-3 py-3 font-serif text-[14.5px] italic text-fog">
               Nothing resting — a fresh quote goes out on the next 15-minute cycle.
             </p>
           ) : (
@@ -201,15 +201,15 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
 
         {/* activity ledger */}
         <div className="border-2 border-line bg-pane">
-          <div className="border-b-2 border-line px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-fog">
+          <div className="border-b-2 border-line px-3 py-1.5 font-mono text-[12.5px] uppercase tracking-[0.14em] text-fog">
             Activity
           </div>
           <div className="max-h-56 overflow-y-auto">
             {(st.ledger ?? []).length === 0 ? (
-              <p className="px-3 py-3 font-serif text-[12.5px] italic text-fog">No activity yet.</p>
+              <p className="px-3 py-3 font-serif text-[14.5px] italic text-fog">No activity yet.</p>
             ) : (
               (st.ledger ?? []).map((l, i) => (
-                <div key={i} className="flex items-center gap-3 border-b border-line/50 px-3 py-1 font-mono text-[11px]">
+                <div key={i} className="flex items-center gap-3 border-b border-line/50 px-3 py-1 font-mono text-[13px]">
                   <span className="text-fog">{new Date(l.ts).toLocaleString(undefined, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
                   <span className={l.kind === "premium_in" ? "text-mint" : l.kind === "buyback_out" ? "text-rose" : "text-paper"}>
                     {l.kind.replace("_", " ")}
@@ -224,14 +224,14 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
 
         {/* cycle log */}
         <div className="border-2 border-line bg-pane">
-          <div className="border-b-2 border-line px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-fog">
+          <div className="border-b-2 border-line px-3 py-1.5 font-mono text-[12.5px] uppercase tracking-[0.14em] text-fog">
             Agent log · every 15 min
           </div>
-          <div className="max-h-56 overflow-y-auto px-3 py-1.5 font-mono text-[11px] leading-relaxed">
+          <div className="max-h-56 overflow-y-auto px-3 py-1.5 font-mono text-[13px] leading-relaxed">
             {(st.cycles ?? []).map((c, i) => (
               <div key={i} className={c.ok ? "text-fog" : "text-rose"}>
-                <span className="text-fog/60">{new Date(c.ts).toLocaleTimeString()}</span>{" "}
-                <span className={c.ok ? "text-paper/80" : "text-rose"}>{c.msg}</span>
+                <span className="text-fog/85">{new Date(c.ts).toLocaleTimeString()}</span>{" "}
+                <span className={c.ok ? "text-paper/95" : "text-rose"}>{c.msg}</span>
               </div>
             ))}
             {st.last_error && <div className="text-rose">last error: {st.last_error}</div>}
@@ -239,7 +239,7 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
         </div>
       </div>
 
-      <p className="px-1 font-serif text-[11px] italic text-fog">
+      <p className="px-1 font-serif text-[13px] italic text-fog">
         Derive {net} · live read via the fleet's key · revoke any time at
         {net === "mainnet" ? "app.derive.xyz" : "testnet.derive.xyz"} → Developers
       </p>

@@ -94,7 +94,7 @@ export function Security() {
     <main className="bg-ink pt-[58px]">
       <div className="mx-auto max-w-4xl px-5 py-16">
         <div className="rule-double pt-5">
-          <div className="flex items-baseline gap-4 font-mono text-[12px] uppercase tracking-[0.2em] text-fog">
+          <div className="flex items-baseline gap-4 font-mono text-[14px] uppercase tracking-[0.2em] text-fog">
             <span className="font-bold text-mint">Security</span>
             <span>Published in full · updated 2026-08-19</span>
           </div>
@@ -103,7 +103,7 @@ export function Security() {
           </h1>
         </div>
 
-        <div className="mt-8 space-y-4 font-serif text-[15.5px] leading-relaxed text-paper/85">
+        <div className="mt-8 space-y-4 font-serif text-[17px] leading-relaxed text-paper/95">
           <p>
             This page is the unedited result of a security review of the entire
             Overwrite stack — website, APIs, database, hosted trading fleet,
@@ -115,7 +115,7 @@ export function Security() {
             substitute for a professional third-party audit; one is planned
             before anything here ever touches real money.
           </p>
-          <p className="border-2 border-mint bg-pane px-4 py-3 font-mono text-[13px] uppercase tracking-[0.04em] text-mint">
+          <p className="border-2 border-mint bg-pane px-4 py-3 font-mono text-[14.5px] uppercase tracking-[0.04em] text-mint">
             The single most important fact: Overwrite runs on Derive TESTNET
             only. Test funds, fake money, real orders. No component of this
             system can custody, withdraw, or transfer real assets.
@@ -129,23 +129,23 @@ export function Security() {
           {FINDINGS.map((f, i) => (
             <div key={i} className="border-2 border-line bg-pane">
               <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2">
-                <span className={`border px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase ${SEV_COLOR[f.sev]}`}>
+                <span className={`border px-1.5 py-0.5 font-mono text-[12.5px] font-bold uppercase ${SEV_COLOR[f.sev]}`}>
                   {f.sev}
                 </span>
-                <span className="min-w-0 flex-1 font-mono text-[12.5px] font-bold uppercase tracking-[0.02em] text-paper">
+                <span className="min-w-0 flex-1 font-mono text-[14.5px] font-bold uppercase tracking-[0.02em] text-paper">
                   {f.title}
                 </span>
-                <span className={`font-mono text-[10.5px] font-bold uppercase ${
+                <span className={`font-mono text-[13px] font-bold uppercase ${
                   f.status === "FIXED" ? "text-mint" : "text-amber"
                 }`}>
                   {f.status}
                 </span>
               </div>
-              <div className="space-y-2 px-4 py-3 font-serif text-[13.5px] leading-relaxed text-paper/85">
+              <div className="space-y-2 px-4 py-3 font-serif text-[15px] leading-relaxed text-paper/95">
                 <p>{f.detail}</p>
                 {f.fix !== "—" && (
                   <p className="text-fog">
-                    <span className="font-mono text-[10.5px] uppercase text-mint">Resolution → </span>
+                    <span className="font-mono text-[13px] uppercase text-mint">Resolution → </span>
                     {f.fix}
                   </p>
                 )}
@@ -159,16 +159,16 @@ export function Security() {
         </h2>
         <div className="mt-4 grid gap-0 border-2 border-line sm:grid-cols-2">
           <div className="border-line px-4 py-3 sm:border-r">
-            <div className="mb-2 font-mono text-[11px] uppercase tracking-[0.14em] text-mint">It can</div>
-            <ul className="space-y-1.5 font-serif text-[13.5px] leading-snug text-paper/85">
+            <div className="mb-2 font-mono text-[13px] uppercase tracking-[0.14em] text-mint">It can</div>
+            <ul className="space-y-1.5 font-serif text-[15px] leading-snug text-paper/95">
               <li>→ Read balances of a wallet you connect (no signatures)</li>
               <li>→ Quote and place limit orders on Derive TESTNET, inside your own subaccount, under a session key you authorize</li>
               <li>→ Cancel and replace its own orders</li>
             </ul>
           </div>
           <div className="px-4 py-3">
-            <div className="mb-2 font-mono text-[11px] uppercase tracking-[0.14em] text-rose">It cannot</div>
-            <ul className="space-y-1.5 font-serif text-[13.5px] leading-snug text-paper/85">
+            <div className="mb-2 font-mono text-[13px] uppercase tracking-[0.14em] text-rose">It cannot</div>
+            <ul className="space-y-1.5 font-serif text-[15px] leading-snug text-paper/95">
               <li>→ Touch mainnet or any real asset (endpoints are hardcoded to testnet; the agent has a mainnet hard-gate)</li>
               <li>→ Withdraw to an arbitrary address via the plain withdraw endpoint (it has no recipient field — it pays back only to your own wallet). Note: the key is admin-scoped because Derive has no trade-only scope, so revoke it when you're done and only fund what you can afford to lose.</li>
               <li>→ See your seed phrase or private keys — it never asks, and you should never share them with anyone</li>
@@ -180,7 +180,7 @@ export function Security() {
         <h2 className="mt-12 border-b-2 border-line pb-2 font-display text-2xl uppercase text-paper">
           Standing risk disclosures
         </h2>
-        <div className="mt-4 space-y-3 font-serif text-[14.5px] leading-relaxed text-paper/85">
+        <div className="mt-4 space-y-3 font-serif text-[16px] leading-relaxed text-paper/95">
           <p>
             Even on testnet, this is experimental software built rapidly by a
             solo studio with AI assistance. Bugs, downtime, incorrect quotes,
@@ -193,7 +193,7 @@ export function Security() {
             custody in dedicated hardware, and its own updated version of this
             page — and you should still only risk what you can afford to lose.
           </p>
-          <p className="font-mono text-[12px] uppercase tracking-[0.06em] text-fog">
+          <p className="font-mono text-[14px] uppercase tracking-[0.06em] text-fog">
             Questions or a vulnerability to report → open an issue on{" "}
             <a href="https://github.com/keegan-dotcom/overwrite" target="_blank" rel="noreferrer" className="text-mint underline">GitHub</a>.
             Full terms → <Link to="/terms" className="text-mint underline">Terms of Use</Link>.

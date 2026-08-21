@@ -33,7 +33,7 @@ export function Hero() {
     <section className="grain border-b-2 border-paper pt-[58px]">
       <div className="mx-auto max-w-6xl px-5">
         {/* masthead strip */}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line py-2 font-mono text-[11px] uppercase tracking-[0.14em] text-fog">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line py-2 font-mono text-[13px] uppercase tracking-[0.14em] text-fog">
           <span>Vol. 1 — The Covered-Call Paper</span>
           <span className="flex items-center gap-2">
             <span className="live-dot inline-block h-2 w-2 bg-market" />
@@ -46,7 +46,7 @@ export function Hero() {
           {/* headline column */}
           <div>
             <Reveal>
-              <p className="mb-6 inline-block border-2 border-paper bg-ink px-3 py-1 font-mono text-[12px] uppercase tracking-[0.2em] text-paper">
+              <p className="mb-6 inline-block border-2 border-paper bg-ink px-3 py-1 font-mono text-[14px] uppercase tracking-[0.2em] text-paper">
                 <span className="text-accent font-bold">Automated covered calls</span> — yield on assets you already hold
               </p>
             </Reveal>
@@ -62,7 +62,7 @@ export function Hero() {
               </h1>
             </Reveal>
             <Reveal delay={2}>
-              <p className="mt-8 max-w-xl font-serif text-xl leading-relaxed text-paper/85">
+              <p className="mt-8 max-w-xl font-serif text-xl leading-relaxed text-paper/95">
                 Overwrite is an autonomous agent that sells covered calls against
                 what you already hold — systematically, on-chain, on{" "}
                 <a
@@ -97,21 +97,21 @@ export function Hero() {
           {/* order ticket */}
           <Reveal delay={2} className="hidden lg:block">
             <div className="regmarks ticket ticket-accent -rotate-1 p-6">
-              <div className="flex items-baseline justify-between border-b-2 border-paper pb-3 font-mono text-[12px] uppercase tracking-[0.1em]">
+              <div className="flex items-baseline justify-between border-b-2 border-paper pb-3 font-mono text-[14px] uppercase tracking-[0.1em]">
                 <span className="font-bold">Sell ticket № 0001</span>
                 <span className="text-accent font-bold">gross {pct(eth.gross.d25, 0)}/yr</span>
               </div>
-              <div className="flex justify-between border-b border-line py-2.5 font-mono text-[13px]">
+              <div className="flex justify-between border-b border-line py-2.5 font-mono text-[14.5px]">
                 <span className="text-fog">UNDERLYING</span><span>ETH · covered</span>
               </div>
-              <div className="flex justify-between border-b border-line py-2.5 font-mono text-[13px]">
+              <div className="flex justify-between border-b border-line py-2.5 font-mono text-[14.5px]">
                 <span className="text-fog">DELTA / DTE</span><span>0.25Δ · 35 days</span>
               </div>
-              <div className="flex justify-between border-b border-line py-2.5 font-mono text-[13px]">
+              <div className="flex justify-between border-b border-line py-2.5 font-mono text-[14.5px]">
                 <span className="text-fog">ORDER TYPE</span><span>limit only. always.</span>
               </div>
               <PayoffSketch />
-              <p className="mt-4 border-t-2 border-paper pt-3 font-serif text-[15px] leading-relaxed text-paper/80">
+              <p className="mt-4 border-t-2 border-paper pt-3 font-serif text-[16.5px] leading-relaxed text-paper/95">
                 Premium in every cycle. Upside capped past the strike — priced,
                 not hidden. Downside stays yours.{" "}
                 <a href="#honest" className="underline decoration-accent decoration-2 underline-offset-2">

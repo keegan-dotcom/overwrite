@@ -132,6 +132,87 @@ export function planFromIntent(parsed: ParsedIntent, account?: AccountCtx): Stra
       label = `${asset} zero-cost collar`;
       break;
     }
+    case "call":
+    case "lotto": {
+      // direct bullish bet — buy a call. Defined-risk (max loss = premium paid),
+      // so it stays inside the defined-risk guard. Lotto just picks a far-OTM
+      // strike. Explicit strike (capTarget) wins; else delta-target.
+      const isLotto = parsed.strategyId === "lotto";
+      objectiveKind = "directional";
+      objective.kind = "directional";
+      objective.view = "up";
+      legs.push({
+        id: "call", venue: "option", asset, side: "buy", orderType: "ioc",
+        sizing: { kind: "contracts", amount: 1 },
+        option: {
+          type: "C", expiry: dte,
+          strike: p.capTarget && p.capTarget > 0
+            ? { kind: "absolute", price: p.capTarget }
+            : { kind: "delta", target: isLotto ? 0.12 : 0.4 },
+        },
+      });
+      label = isLotto ? `${asset} lotto calls` : `${asset} long calls`;
+      break;
+    }
+    case "put": {
+      // direct bearish bet — buy a put. Defined-risk (max loss = premium).
+      objectiveKind = "directional";
+      objective.kind = "directional";
+      objective.view = "down";
+      legs.push({
+        id: "put", venue: "option", asset, side: "buy", orderType: "ioc",
+        sizing: { kind: "contracts", amount: 1 },
+        option: {
+          type: "P", expiry: dte,
+          strike: p.capTarget && p.capTarget > 0
+            ? { kind: "absolute", price: p.capTarget }
+            : { kind: "delta", target: 0.4 },
+        },
+      });
+      label = `${asset} long puts`;
+      break;
+    }
+    case "perp_long":
+    case "perp_short": {
+      // DEGEN: leveraged perp. NOT defined-risk (liquidation possible), so we
+      // turn off the defined-risk guard and instead BOUND it with a notional cap
+      // (the executor also enforces a free-margin buffer before it opens).
+      const up = parsed.strategyId === "perp_long";
+      const lev = 3;
+      objectiveKind = "directional";
+      objective.kind = "directional";
+      objective.view = up ? "up" : "down";
+      constraints.requireDefinedRisk = false;
+      constraints.maxNotionalUsd = Math.round(lev * spot); // ~one unit at leverage; tune in the card
+      objective.stopLossPct = p.stopLossPct ?? 0.4;
+      legs.push({
+        id: "perp", venue: "perp", asset, side: up ? "buy" : "sell", orderType: "ioc",
+        sizing: { kind: "notional_usd", usd: Math.round(lev * spot) },
+      });
+      label = `${asset} ${lev}× ${up ? "long" : "short"} (perp)`;
+      break;
+    }
+    case "strangle": {
+      // DEGEN: naked short strangle — sell an OTM call AND an OTM put for premium.
+      // Undefined risk on both tails, so the defined-risk guard is off. Objective
+      // is "neutral" (range-bound) so the covered-call coverage check doesn't
+      // fire (we're intentionally naked here).
+      objectiveKind = "neutral";
+      objective.kind = "neutral";
+      constraints.requireDefinedRisk = false;
+      legs.push({
+        id: "call", venue: "option", asset, side: "sell", orderType: "ioc",
+        sizing: { kind: "contracts", amount: 1 },
+        option: { type: "C", expiry: dte, strike: { kind: "delta", target: 0.2 } },
+      });
+      legs.push({
+        id: "put", venue: "option", asset, side: "sell", orderType: "ioc",
+        sizing: { kind: "contracts", amount: 1 },
+        option: { type: "P", expiry: dte, strike: { kind: "delta", target: 0.2 } },
+      });
+      label = `${asset} short strangle`;
+      break;
+    }
   }
 
   if (p.stopLossPct != null) objective.stopLossPct = p.stopLossPct;

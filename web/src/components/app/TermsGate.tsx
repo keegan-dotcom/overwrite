@@ -30,7 +30,7 @@ export function TermsGate({ onAccept }: { onAccept: () => void }) {
     <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-ink/95 p-4 backdrop-blur-sm">
       <div className="w-full max-w-xl border-2 border-paper bg-ink shadow-hard">
         <div className="border-b-2 border-line px-5 py-3">
-          <div className="font-mono text-[10.5px] uppercase tracking-[0.2em] text-mint">
+          <div className="font-mono text-[13px] uppercase tracking-[0.2em] text-mint">
             Before you enter
           </div>
           <div className="font-display text-2xl uppercase text-paper">
@@ -38,7 +38,7 @@ export function TermsGate({ onAccept }: { onAccept: () => void }) {
           </div>
         </div>
 
-        <div className="space-y-2.5 px-5 py-4 font-serif text-[13.5px] leading-relaxed text-paper/85">
+        <div className="space-y-2.5 px-5 py-4 font-serif text-[15px] leading-relaxed text-paper/95">
           <p>
             <span className="font-bold text-mint">Testnet only.</span>{" "}
             Every trade here uses Derive testnet funds - fake money, real
@@ -62,7 +62,7 @@ export function TermsGate({ onAccept }: { onAccept: () => void }) {
         </div>
 
         <div className="space-y-3 border-t-2 border-line px-5 py-4">
-          <label className="flex cursor-pointer items-start gap-2.5 font-serif text-[13px] leading-snug text-paper/90">
+          <label className="flex cursor-pointer items-start gap-2.5 font-serif text-[14.5px] leading-snug text-paper/95">
             <input type="checkbox" className={box} checked={agreeTerms}
               onChange={(e) => setAgreeTerms(e.target.checked)} />
             <span>
@@ -72,7 +72,7 @@ export function TermsGate({ onAccept }: { onAccept: () => void }) {
               <Link to="/security" target="_blank" className="text-mint underline decoration-2 underline-offset-2">published risk disclosures</Link>.
             </span>
           </label>
-          <label className="flex cursor-pointer items-start gap-2.5 font-serif text-[13px] leading-snug text-paper/90">
+          <label className="flex cursor-pointer items-start gap-2.5 font-serif text-[14.5px] leading-snug text-paper/95">
             <input type="checkbox" className={box} checked={agreeRisk}
               onChange={(e) => setAgreeRisk(e.target.checked)} />
             <span>
@@ -84,14 +84,14 @@ export function TermsGate({ onAccept }: { onAccept: () => void }) {
             </span>
           </label>
           <button onClick={accept} disabled={!ready}
-            className={`w-full border-2 px-4 py-2.5 font-mono text-[13px] font-bold uppercase tracking-[0.08em] transition-transform ${
+            className={`w-full border-2 px-4 py-2.5 font-mono text-[14.5px] font-bold uppercase tracking-[0.08em] transition-transform ${
               ready
                 ? "border-paper bg-accent text-ink shadow-hardsm hover:-translate-x-px hover:-translate-y-px"
                 : "border-line text-fog"
             }`}>
             {ready ? "Enter the trade desk →" : "Check both boxes to continue"}
           </button>
-          <p className="text-center font-mono text-[9.5px] uppercase tracking-[0.1em] text-fog">
+          <p className="text-center font-mono text-[12px] uppercase tracking-[0.1em] text-fog">
             demo pricing · derive testnet · your keys stay yours
           </p>
         </div>
