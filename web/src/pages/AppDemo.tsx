@@ -537,6 +537,15 @@ export function AppDemo() {
           } else {
             nextPlan.manage = { ...(nextPlan.manage ?? {}), defendProximityPct: pct };
           }
+          // announce BEFORE the wallet pops — a surprise signature request from
+          // typing a sentence is jarring. These are gasless message signatures
+          // (config-only, nothing trades from the signature itself).
+          setMessages((m) => [...m, {
+            role: "agent",
+            text: disarm
+              ? "Turning strike defense off. Your wallet will ask for two quick signatures — both gasless, config-only (one updates the plan, one keeps the agent live)."
+              : `Arming strike defense at ${Math.round(pct * 100)}%. Your wallet will ask for two quick signatures — both gasless, config-only (one updates the plan, one keeps the agent live). No funds move from signing.`,
+          }]);
           await control(disarm ? "disarm defense" : "arm defense", async () => {
             await hostedDeployPlan(dw, owner, nextPlan);
             if (live) await hostedSetLive(dw, owner, true); // keep it trading — deploy alone lands dry-run
