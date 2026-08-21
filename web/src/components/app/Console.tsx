@@ -112,12 +112,6 @@ export function Console({ ownerEoa }: { ownerEoa: string | null }) {
         <span className={active ? "text-mint" : "text-amber"}>
           ● {active ? "agent active" : st.status}
         </span>
-        {st.equity_usd != null && st.maint_margin_usd != null && st.equity_usd > 0 && (() => {
-          const usage = st.maint_margin_usd / st.equity_usd;
-          const cls = usage < 0.5 ? "text-mint" : usage < 0.8 ? "text-amber" : "text-rose";
-          const word = usage < 0.5 ? "healthy" : usage < 0.8 ? "watch" : "at risk";
-          return <span className={cls} title="Maintenance margin used vs equity — how close to liquidation">margin {(usage * 100).toFixed(0)}% · {word}</span>;
-        })()}
         <span className="font-bold text-paper">{strategyLabel(st.config)}</span>
         {st.subaccount_id != null && <span className="text-fog">subaccount {st.subaccount_id}</span>}
         {st.last_cycle_at && (
