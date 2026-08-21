@@ -140,6 +140,8 @@ export type HostedStatus = {
   open_orders?: HostedOrder[];
   collaterals?: { asset: string; amount: number; value_usd: number }[];
   equity_usd?: number;
+  maint_margin_usd?: number;
+  init_margin_usd?: number;
 };
 
 export const hostedEnroll = (ownerEoa: string, deriveWallet: string) =>
