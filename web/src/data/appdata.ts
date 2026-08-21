@@ -77,9 +77,10 @@ export type IntentParams = {
   capTarget: number | null;  // user's "$X upside target" (or explicit option strike)
   stopLossPct: number | null;  // e.g. 0.15
   dte: number;
-  sizeUsd?: number;   // "buy $100 of calls" — dollar budget for a direct option buy
+  sizeUsd?: number;   // "buy $100 of calls" / "$200 into a 5x long" / "$100 of ETH every week"
   leverage?: number;  // "5x long" — leverage for perp strategies (clamped 2–20)
   defendProximityPct?: number; // "roll up if spot gets within 5% of my strike" (0.05)
+  cadenceDays?: number; // DCA cadence: "every week" → 7, "every day" → 1, "monthly" → 30
 };
 
 const DEF: IntentParams = { targetYieldAnnual: 0.10, capTarget: null, stopLossPct: null, dte: 35 };
@@ -374,14 +375,15 @@ function leveragePerpQuote(a: Asset, o: Partial<IntentParams>, dir: "long" | "sh
   const lev = Math.min(20, Math.max(2, Math.round(o.leverage ?? 3))); // adjustable in chat / tune card
   const signed = dir === "long" ? lev : -lev;
   const stop = p.stopLossPct ?? 0.4;
+  const margin = o.sizeUsd && o.sizeUsd > 0 ? o.sizeUsd : null; // "$200 into a 5x long"
   return {
     strategyId: dir === "long" ? "perp_long" : "perp_short",
     assetSymbol: a.symbol, title: `${lev}× ${dir === "long" ? "Long" : "Short"} · ${a.symbol}`,
     legs: [], assetQty: signed, dte: p.dte,
     incomeMonthly: 0, incomeAnnualPct: 0, capPrice: null, floorPrice: null,
     stopLossPct: stop,
-    hedgeNote: `${dir === "long" ? "LONG" : "SHORT"} ${a.symbol} PERP ×${lev} (leverage)`,
-    headline: `${lev}× ${dir} ${a.symbol} via perps — every 1% move in ${a.symbol} moves your position ~${lev}%.`,
+    hedgeNote: `${dir === "long" ? "LONG" : "SHORT"} ${a.symbol} PERP ×${lev}${margin ? ` · ${fmtUsd(margin)} margin` : ""} (leverage)`,
+    headline: `${lev}× ${dir} ${a.symbol} via perps${margin ? ` on ${fmtUsd(margin)} margin (~${fmtUsd(margin * lev)} notional)` : ""} — every 1% move in ${a.symbol} moves your position ~${lev}%.`,
     tradeoffs: [
       `Leverage cuts both ways: an adverse move of ~${(100 / lev).toFixed(0)}% can liquidate the whole position.`,
       "You pay or earn funding every hour to hold the perp.",
@@ -392,6 +394,31 @@ function leveragePerpQuote(a: Asset, o: Partial<IntentParams>, dir: "long" | "sh
       `Caps notional so leverage stays ~${lev}× and can't creep higher`,
       `Auto-closes at your ${(stop * 100).toFixed(0)}% stop`,
       "Watches funding + margin every cycle and warns before a liquidation zone",
+    ],
+  };
+}
+
+function dcaQuote(a: Asset, o: Partial<IntentParams> = {}): Quote {
+  const usd = o.sizeUsd && o.sizeUsd > 0 ? o.sizeUsd : 100;
+  const every = o.cadenceDays && o.cadenceDays > 0 ? o.cadenceDays : 7;
+  const perYear = Math.round(365 / every);
+  const label = every === 1 ? "day" : every === 7 ? "week" : every === 30 ? "month" : `${every} days`;
+  return {
+    strategyId: "dca", assetSymbol: a.symbol, title: `Auto-Buy · ${a.symbol}`,
+    legs: [], assetQty: 1, dte: every,
+    incomeMonthly: 0, incomeAnnualPct: 0, capPrice: null, floorPrice: null,
+    stopLossPct: o.stopLossPct ?? null,
+    headline: `Buys ${fmtUsd(usd)} of ${a.symbol} every ${label}, automatically — ~${fmtUsd(usd * perYear)}/yr of steady accumulation, no timing decisions.`,
+    tradeoffs: [
+      `This is ownership, not income: your P&L is simply ${a.symbol}'s price. No cap, no floor, no leverage.`,
+      `Each buy is a real spot fill (${a.symbol}-USDC) from your vault — keep enough USDC on Derive to fund the cadence.`,
+      "DCA smooths your entry price over time; it does NOT protect the downside. Add 'protect my " + a.symbol + "' anytime to floor it.",
+      "Stop anytime by killing the strategy — no lockups, you keep everything bought.",
+    ],
+    managed: [
+      `Buys ${fmtUsd(usd)} of ${a.symbol} every ${label} at a fair marketable price (never lifts a gouged ask)`,
+      "Skips a cycle if free USDC runs short — resumes automatically when topped up",
+      "Every fill lands in your Activity ledger, timestamped",
     ],
   };
 }
@@ -461,6 +488,10 @@ export const STRATEGIES: Strategy[] = [
     tagline: "Pure income, no market view - direction hedged with perps.",
     fitsWhen: "You want the yield without betting on price.",
     risk: "moderate", quote: neutralQuote },
+  { id: "dca", name: "Auto-Buy (DCA)", emoji: "🔁", proName: "recurring spot buy",
+    tagline: "Buys a fixed $ amount on a schedule. Boring on purpose.",
+    fitsWhen: "You want to accumulate without timing the market.",
+    risk: "conservative", quote: dcaQuote },
 
   /* degen mode — riskier, leveraged, or undefined-risk. Hidden by default. */
   { id: "perp_long", name: "Leverage Long", emoji: "🚀", proName: "3× perp long",

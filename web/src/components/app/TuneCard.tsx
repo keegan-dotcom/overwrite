@@ -32,6 +32,12 @@ export function TuneCard({ plan, onChange }: { plan: StrategyPlan; onChange: (p:
   // strike defense only applies where there's a short option to roll
   const shortOptLeg = plan.legs.find((l) => l.venue === "option" && l.side === "sell");
   const defendPct = plan.manage?.defendProximityPct ?? null;
+  // recurring spot buy (DCA): tune the per-buy $ and the cadence
+  const dcaLeg = plan.schedule.kind === "recurring"
+    ? plan.legs.find((l) => l.venue === "spot" && l.side === "buy" && l.sizing.kind === "notional_usd")
+    : undefined;
+  const dcaUsd = dcaLeg?.sizing.kind === "notional_usd" ? dcaLeg.sizing.usd : null;
+  const cadence = plan.schedule.everyDays ?? 7;
 
   const sizePct = pctLeg?.sizing.kind === "pct_of_collateral" ? pctLeg.sizing.pct
     : pctLeg?.sizing.kind === "cash_secured" ? (pctLeg.sizing.pct ?? 100) : null;
@@ -43,14 +49,26 @@ export function TuneCard({ plan, onChange }: { plan: StrategyPlan; onChange: (p:
   const dteMid = optLeg?.option ? Math.round((optLeg.option.expiry.dteMin + optLeg.option.expiry.dteMax) / 2) : null;
   const maxNotional = plan.constraints.maxNotionalUsd ?? null;
   const minYield = plan.objective.targetYieldAnnual ?? null;
-  // perp notional = leverage × margin base (real free USDC, else one unit of spot),
-  // matching how the planner built it — so the slider reads and writes the same base.
-  const marginBase = freeUsdc > 0 ? freeUsdc : spot;
+  // perp notional = leverage × margin base. Priority mirrors the planner: the
+  // user's explicit $-budget (plan.marginUsd), else free USDC, else one unit of
+  // spot — so the slider reads and writes the same base the plan was built on.
+  const marginBase = plan.marginUsd ?? (freeUsdc > 0 ? freeUsdc : spot);
   const leverage = perpLeg?.sizing.kind === "notional_usd" && marginBase > 0
     ? Math.min(20, Math.max(2, Math.round(perpLeg.sizing.usd / marginBase))) : null;
 
   /* ---- live preview: recompute the economics from the current knobs ------- */
   const preview = (() => {
+    if (dcaLeg && dcaUsd != null) {
+      const perYear = Math.round(365 / Math.max(1, cadence));
+      return {
+        kind: "opt" as const,
+        lines: [
+          { k: "Each buy", v: fmtUsd(dcaUsd) },
+          { k: "Cadence", v: cadence === 1 ? "daily" : cadence === 7 ? "weekly" : cadence === 30 ? "monthly" : `every ${cadence}d` },
+          { k: "Per year", v: `~${fmtUsd(dcaUsd * perYear)} (${perYear} buys)` },
+        ],
+      };
+    }
     if (perpLeg && leverage != null) {
       return {
         kind: "perp" as const,
@@ -113,6 +131,16 @@ export function TuneCard({ plan, onChange }: { plan: StrategyPlan; onChange: (p:
     else if (p.manage) { delete p.manage.defendProximityPct; if (!Object.keys(p.manage).length) delete p.manage; }
     onChange(p);
   };
+  const setDcaUsd = (usd: number) => {
+    const p = clone();
+    for (const l of p.legs) if (l.venue === "spot" && l.side === "buy" && l.sizing.kind === "notional_usd") l.sizing.usd = Math.max(10, usd);
+    onChange(p);
+  };
+  const setDcaCadence = (days: number) => {
+    const p = clone();
+    p.schedule = { kind: "recurring", everyDays: days };
+    onChange(p);
+  };
 
   const Row = ({ label, children }: { label: string; children: ReactNode }) => (
     <div className="flex items-center gap-3 py-1.5">
@@ -122,7 +150,9 @@ export function TuneCard({ plan, onChange }: { plan: StrategyPlan; onChange: (p:
   );
 
   // one-line summary for the collapsed header
-  const summary = leverage != null ? `${leverage}× leverage`
+  const summary = dcaLeg && dcaUsd != null
+    ? `${fmtUsd(dcaUsd)} ${cadence === 1 ? "daily" : cadence === 7 ? "weekly" : cadence === 30 ? "monthly" : `every ${cadence}d`}`
+    : leverage != null ? `${leverage}× leverage`
     : [
         sizePct != null ? `${sizePct}%${cashSecured ? " cash" : ` of ${sym}`}` : contracts != null ? `${contracts} contract${contracts === 1 ? "" : "s"}` : null,
         delta != null ? `${delta.toFixed(2)}Δ` : absStrike != null ? fmtUsd(absStrike) : null,
@@ -151,6 +181,29 @@ export function TuneCard({ plan, onChange }: { plan: StrategyPlan; onChange: (p:
 
       {open && (
         <div className="border-t border-line px-3 py-2">
+          {/* DCA — per-buy amount + cadence */}
+          {dcaLeg && dcaUsd != null && (
+            <>
+              <Row label="Each buy">
+                <span className="font-mono text-[13px] text-fog">$</span>
+                <input type="number" min={10} step={10} value={dcaUsd}
+                  onChange={(e) => setDcaUsd(Number(e.target.value) || 10)}
+                  className="w-28 border border-line bg-pane px-2 py-1 font-mono text-[13px] text-paper focus:border-mint focus:outline-none" />
+                <span className="font-mono text-[13px] text-fog">spent per buy, from your vault's USDC</span>
+              </Row>
+              <Row label="Cadence">
+                <div className="flex flex-wrap gap-1.5">
+                  {[[1, "daily"], [7, "weekly"], [14, "2 weeks"], [30, "monthly"]].map(([d, lbl]) => (
+                    <button key={d} onClick={() => setDcaCadence(d as number)}
+                      className={`border px-2 py-0.5 font-mono text-[13px] transition-colors ${
+                        cadence === d ? "border-mint text-mint" : "border-line text-fog hover:text-paper"
+                      }`}>{lbl}</button>
+                  ))}
+                </div>
+              </Row>
+            </>
+          )}
+
           {/* LEVERAGE (perps) */}
           {leverage != null && (
             <Row label="Leverage">

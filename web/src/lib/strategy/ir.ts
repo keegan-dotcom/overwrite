@@ -88,6 +88,9 @@ export interface StrategyPlan {
      * within this fraction of the strike, e.g. 0.05 = 5%. Repeats until killed. */
     defendProximityPct?: number;
   };
+  /** Dollar margin the user committed to a perp position ("put $200 into a 5x
+   * long") — kept so the tune card can reconstruct leverage = notional/margin. */
+  marginUsd?: number;
 }
 
 /** What Derive actually lists per asset — the executor supplies the live map;

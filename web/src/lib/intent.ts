@@ -43,9 +43,13 @@ function detectAsset(text: string): string | null {
 function detectStrategy(text: string): string {
   const has = (...ws: string[]) => ws.some((w) => text.includes(w));
   // ---- degen (leverage / naked) — checked first so they win over income ----
-  if (has("leverage long", "leveraged long", "perp long", "long perp", "long with leverage", "3x long", "5x long", "10x long", "degen long", "max long", "ape in", "ape into"))
+  // any "Nx … long/short" phrasing ("put $200 into a 5x eth long") is a perp
+  const hasLev = /\b\d+(?:\.\d+)?\s*[x×]\b/.test(text);
+  if (has("leverage long", "leveraged long", "perp long", "long perp", "long with leverage", "3x long", "5x long", "10x long", "degen long", "max long", "ape in", "ape into")
+    || (hasLev && /\blong\b/.test(text) && !/\bshort\b/.test(text)))
     return "perp_long";
-  if (has("leverage short", "leveraged short", "perp short", "short perp", "short with leverage", "3x short", "5x short", "10x short", "degen short"))
+  if (has("leverage short", "leveraged short", "perp short", "short perp", "short with leverage", "3x short", "5x short", "10x short", "degen short")
+    || (hasLev && /\bshort\b/.test(text)))
     return "perp_short";
   if (has("lotto", "moonshot", "yolo", "far otm", "far-otm", "long shot", "longshot", "moon "))
     return "lotto";
@@ -59,8 +63,15 @@ function detectStrategy(text: string): string {
   const sellish = has("covered call", "sell call", "sell a call", "write call", "sell my call", "sell put", "sell a put", "cash secured", "cash-secured", "wheel")
     || /sell\s+(?:\w+\s+)?(?:calls?|puts?)/.test(text)
     || (/\bcalls?\b|\bputs?\b/.test(text) && has("for income", "income", "premium", "yield", "earn"));
-  if (buyish && !sellish && /\bcalls?\b/.test(text) && !/\bputs?\b/.test(text)) return "call";
-  if (buyish && !sellish && /\bputs?\b/.test(text)) return "put";
+  // the option "put(s)" — NOT the verb "put $200 into …"
+  const putWord = /\bputs\b/.test(text) || /\bput\b(?!\s*\$?\s*\d)/.test(text);
+  if (buyish && !sellish && /\bcalls?\b/.test(text) && !putWord) return "call";
+  if (buyish && !sellish && putWord) return "put";
+  // recurring spot accumulation (DCA) — only when it's clearly about buying the
+  // ASSET on a schedule, not options ("sell calls every week" stays income).
+  const optionish = /\bcalls?\b|\bputs?\b|covered|premium|yield|income|strangle|collar|perp/.test(text);
+  if (!optionish && has("dca", "dollar cost", "dollar-cost", "every day", "every week", "every month", "each week", "each month", "auto-buy", "auto buy", "recurring buy", "keep buying", "buy a little"))
+    return "dca";
   if (has("neutral", "no view", "no direction", "without betting", "not betting", "don't care which way", "dont care which way", "either way", "hedge the delta", "delta hedge", "just the yield", "pure income", "pure yield"))
     return "neutral";
   if (has("collar", "lock the range", "range", "zero cost", "free insurance", "cost nothing", "pay for itself"))
@@ -166,6 +177,31 @@ export function parseIntent(text: string): ParsedIntent {
     const pct = near ? parseFloat(near[1] ?? near[2]) / 100 : 0.05;
     params.defendProximityPct = Math.min(0.25, Math.max(0.01, pct));
     understood.push(`Strike defense: roll up/out when price comes within ${(params.defendProximityPct * 100).toFixed(0)}% of the strike (repeats until you kill it)`);
+  }
+
+  // DCA cadence: "every day/week/month", "every 3 days", "daily/weekly/monthly"
+  if (strategyId === "dca") {
+    const everyN = t.match(/every\s+(\d+)\s*days?/);
+    params.cadenceDays =
+      everyN ? Math.max(1, Math.min(90, parseInt(everyN[1], 10)))
+      : /every\s+day|daily/.test(t) ? 1
+      : /every\s+other\s+week|biweekly|bi-weekly/.test(t) ? 14
+      : /every\s+month|monthly/.test(t) ? 30
+      : 7; // weekly default
+    const cadLabel = params.cadenceDays === 1 ? "day" : params.cadenceDays === 7 ? "week" : params.cadenceDays === 30 ? "month" : `${params.cadenceDays} days`;
+    understood.push(`Auto-buy cadence: every ${cadLabel}`);
+    // a bare "$250 monthly" is the per-buy amount, and a price "cap" makes no
+    // sense for accumulation — reroute the parsed dollars accordingly.
+    if (params.sizeUsd == null) {
+      // \b after [km] so "$250 monthly" can't absorb the "m" of "monthly"
+      const bare = t.match(/\$\s?([\d,.]+(?:\s?[km]\b)?)/);
+      const v = bare ? parseMoney(bare[1]) : NaN;
+      if (isFinite(v) && v >= 10 && v < 1_000_000) {
+        params.sizeUsd = v;
+        understood.push(`Budget: $${v.toLocaleString()} per buy`);
+      }
+    }
+    delete params.capTarget;
   }
 
   // horizon: "weekly", "monthly", "45 days", "2 months"

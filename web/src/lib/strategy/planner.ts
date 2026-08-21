@@ -44,8 +44,26 @@ export function planFromIntent(parsed: ParsedIntent, account?: AccountCtx): Stra
   const objective: StrategyPlan["objective"] = { kind: "income" };
   const constraints: StrategyPlan["constraints"] = { requireDefinedRisk: true };
   let label = `${asset} covered-call income`;
+  let schedule: StrategyPlan["schedule"] = { kind: "once" };
+  let marginUsd: number | undefined; // dollar margin the user committed to a perp
 
   switch (parsed.strategyId) {
+    case "dca": {
+      // recurring spot buy — dollar-cost averaging. The executor's DCA gate
+      // (dcaDue) fires the buy leg only when the cadence has elapsed.
+      const usd = p.sizeUsd && p.sizeUsd > 0 ? p.sizeUsd : 100;
+      const every = p.cadenceDays && p.cadenceDays > 0 ? p.cadenceDays : 7;
+      objectiveKind = "accumulate";
+      objective.kind = "accumulate";
+      schedule = { kind: "recurring", everyDays: every };
+      legs.push({
+        id: "buy", venue: "spot", asset, side: "buy", orderType: "ioc",
+        sizing: { kind: "notional_usd", usd },
+      });
+      const cad = every === 1 ? "day" : every === 7 ? "week" : every === 30 ? "month" : `${every}d`;
+      label = `${asset} auto-buy $${usd}/${cad}`;
+      break;
+    }
     case "income":
     case "neutral": {
       objectiveKind = "income";
@@ -179,11 +197,14 @@ export function planFromIntent(parsed: ParsedIntent, account?: AccountCtx): Stra
       // (the executor also enforces a free-margin buffer before it opens).
       const up = parsed.strategyId === "perp_long";
       const lev = Math.min(20, Math.max(2, Math.round(p.leverage ?? 3)));
-      // notional = leverage × the cash you can post as margin (real free USDC on
-      // mainnet; falls back to one unit of spot in the demo preview). The
-      // executor ALSO enforces a free-margin buffer, so a too-high leverage is
-      // capped to what margin actually allows.
-      const marginBase = account?.freeUsdc && account.freeUsdc > 0 ? account.freeUsdc : spot;
+      // notional = leverage × margin. Margin base priority: the user's explicit
+      // dollar budget ("put $200 into a 5x long"), else real free USDC on
+      // mainnet, else one unit of spot in the demo preview. The executor ALSO
+      // enforces a free-margin buffer, so a too-high leverage is capped to what
+      // margin actually allows.
+      const marginBase = p.sizeUsd && p.sizeUsd > 0 ? p.sizeUsd
+        : account?.freeUsdc && account.freeUsdc > 0 ? account.freeUsdc : spot;
+      marginUsd = marginBase;
       const notional = Math.round(lev * marginBase);
       objectiveKind = "directional";
       objective.kind = "directional";
@@ -240,11 +261,12 @@ export function planFromIntent(parsed: ParsedIntent, account?: AccountCtx): Stra
 
   return {
     asset, label, objective, legs,
-    schedule: { kind: "once" },
+    schedule,
     constraints,
     spot: { [asset]: spot },
     holdings,
     ...(manage ? { manage } : {}),
+    ...(marginUsd != null ? { marginUsd } : {}),
     ...(account?.freeUsdc != null ? { freeUsdc: account.freeUsdc } : {}),
   };
 }

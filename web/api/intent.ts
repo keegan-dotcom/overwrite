@@ -72,8 +72,9 @@ RULES
   · DEGEN (leverage / naked): "leverage long" / "ape" / "Nx long" → perp_long; "leverage short" → perp_short; "sell a strangle" / "sell premium both sides" (naked) → strangle. Always name the liquidation / undefined-risk danger in "reply".
 - targetYieldAnnual: decimal (10% → 0.1), only if the user expresses an income/yield goal.
 - capTarget: a PRICE of the underlying. For call/put/lotto it is the STRIKE the user names ("$100 strike", "the 4500s"). For income/collar it is the "happy to sell above" level; for shield it is the floor. Only include if plausible (0.3x–4x spot). Never invent one.
-- sizeUsd: a DOLLAR BUDGET to spend on a direct call/put/lotto buy ("buy $100 of calls", "put $500 into puts"). This is money spent, NOT a strike price — keep it separate from capTarget.
+- sizeUsd: a DOLLAR BUDGET — for a direct call/put/lotto buy ("buy $100 of calls"), the MARGIN committed to a perp ("put $200 into a 5x long"), or the per-buy amount of a dca ("buy $100 of ETH every week"). Money spent, NOT a strike price — keep it separate from capTarget.
 - leverage: for perp_long / perp_short, the multiple the user asks for ("5x" → 5, "ape 10x" → 10). Clamp 2–20. Omit for non-perp strategies.
+- dca: recurring spot accumulation of the ASSET itself — "buy $100 of ETH every week", "DCA into BTC", "auto-buy monthly". NOT for options ("sell calls every week" is income). Set sizeUsd to the per-buy amount and cadenceDays to the cadence (day → 1, week → 7, month → 30, "every N days" → N; default 7). Clamp cadenceDays 1–90.
 - stopLossPct: decimal, from "close/bail/exit if down X%".
 - defendProximityPct: decimal, ONLY for strategies that sell an option (income/wheel/collar/neutral/strangle). Set it when the user wants the agent to roll the short strike up/out to keep upside as price approaches — e.g. "roll it up if ETH gets within 5% of my strike", "defend my strike", "don't cap my upside", "keep rolling higher so I don't get called away". Use the % they name (5% → 0.05); default 0.05 if they ask for the behavior without a number. Clamp 0.01–0.25. Omit if they don't ask for it.
 - dte: days to expiry if the user implies a horizon (weekly → 7, monthly → 30). Clamp 3-120. Omit if unsaid.
@@ -97,6 +98,7 @@ const TOOL = {
       sizeUsd: { type: ["number", "null"], description: "dollar budget to spend on a direct option buy" },
       leverage: { type: ["number", "null"], description: "perp leverage 2-20 (perp strategies only)" },
       defendProximityPct: { type: ["number", "null"], description: "decimal 0.01-0.25: roll the short strike up/out when spot is within this % of it (option-selling strategies only)" },
+      cadenceDays: { type: ["integer", "null"], description: "dca only: days between recurring buys, 1-90 (week=7, month=30)" },
       understood: { type: "array", items: { type: "string" }, description: "2-5 short parse traces" },
       reply: { type: "string", description: "1-2 sentence plain-English response" },
     },
@@ -173,6 +175,7 @@ export default async function handler(req: Request): Promise<Response> {
   const sizeUsd = num(input.sizeUsd);
   const leverage = num(input.leverage);
   const defend = num(input.defendProximityPct);
+  const cadence = num(input.cadenceDays);
 
   const params: Record<string, number> = {};
   if (y != null && y > 0.004 && y <= 1.5) params.targetYieldAnnual = y;
@@ -182,6 +185,7 @@ export default async function handler(req: Request): Promise<Response> {
   if (sizeUsd != null && sizeUsd > 0 && sizeUsd < 1_000_000) params.sizeUsd = sizeUsd;
   if (leverage != null && leverage >= 2 && leverage <= 20) params.leverage = Math.round(leverage);
   if (defend != null && defend >= 0.01 && defend <= 0.25) params.defendProximityPct = defend;
+  if (cadence != null && cadence >= 1 && cadence <= 90) params.cadenceDays = Math.round(cadence);
 
   const understood = Array.isArray(input.understood)
     ? input.understood.filter((x: unknown) => typeof x === "string").slice(0, 6)

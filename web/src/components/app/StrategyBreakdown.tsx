@@ -22,6 +22,7 @@ type Plan = {
   objective?: { kind?: string; targetYieldAnnual?: number; view?: string };
   constraints?: { requireDefinedRisk?: boolean; maxLossUsd?: number; maxNotionalUsd?: number };
   manage?: { defendProximityPct?: number };
+  schedule?: { kind?: string; everyDays?: number };
   legs?: Leg[];
 };
 type Cfg = {
@@ -72,6 +73,32 @@ function describe(cfg: Cfg): { title: string; summary: string; rows: Row[]; flag
   const longPut = legs.find((l) => l.venue === "option" && l.side === "buy" && l.option?.type === "P");
   const longCall = legs.find((l) => l.venue === "option" && l.side === "buy" && l.option?.type === "C");
   const perp = legs.find((l) => l.venue === "perp");
+
+  // recurring spot accumulation (DCA) — no options, no leverage; describe it
+  // on its own terms and skip the option-centric rows/flags entirely.
+  const spotBuy = legs.find((l) => l.venue === "spot" && l.side === "buy");
+  if (spotBuy && !legs.some((l) => l.venue === "option" || l.venue === "perp") && plan?.schedule?.kind === "recurring") {
+    const every = plan.schedule.everyDays ?? 7;
+    const cad = every === 1 ? "day" : every === 7 ? "week" : every === 30 ? "month" : `${every} days`;
+    const usd = spotBuy.sizing?.kind === "notional_usd" ? Number(spotBuy.sizing.usd) : 0;
+    const perYear = Math.round(365 / Math.max(1, every));
+    return {
+      title: plan?.label ?? `${asset} auto-buy`,
+      summary: `Every ${cad} the agent buys ${usd ? `$${usd.toLocaleString()}` : "a fixed amount"} of ${asset} from your vault's USDC at a fair market price — dollar-cost averaging on autopilot, until you kill it.`,
+      rows: [
+        { k: "Asset", v: asset },
+        { k: "Strategy", v: plan?.label ?? `${asset} auto-buy (DCA)` },
+        ...(usd ? [{ k: "Each buy", v: `$${usd.toLocaleString()} of ${asset}` }] : []),
+        { k: "Cadence", v: `every ${cad} (~${perYear} buys/yr)` },
+        { k: "Funding", v: "your vault's free USDC — skips a cycle if it runs short, resumes when topped up" },
+      ],
+      flags: [
+        { tone: "good", text: `No leverage, no liquidation, no options — this is plain ownership of ${asset}, accumulated steadily.` },
+        { tone: "info", text: `DCA smooths your entry price; it does NOT protect the downside. Ask for "protect my ${asset}" anytime to add a floor.` },
+        { tone: "info", text: `Keep enough USDC on Derive to fund the cadence — each buy spends from the vault.` },
+      ],
+    };
+  }
   const perpHedged = perp && (shortCall || shortPut);         // neutral: perp is a hedge
   const perpDirectional = perp && !shortCall && !shortPut;    // degen: perp IS the bet
   const isStrangle = shortCall && shortPut;                   // naked premium both sides
