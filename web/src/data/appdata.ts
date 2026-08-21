@@ -73,9 +73,11 @@ export type Strategy = {
 
 export type IntentParams = {
   targetYieldAnnual: number; // e.g. 0.10
-  capTarget: number | null;  // user's "$X upside target"
+  capTarget: number | null;  // user's "$X upside target" (or explicit option strike)
   stopLossPct: number | null;  // e.g. 0.15
   dte: number;
+  sizeUsd?: number;   // "buy $100 of calls" — dollar budget for a direct option buy
+  leverage?: number;  // "5x long" — leverage for perp strategies (clamped 2–20)
 };
 
 const DEF: IntentParams = { targetYieldAnnual: 0.10, capTarget: null, stopLossPct: null, dte: 35 };
@@ -357,7 +359,7 @@ function lottoQuote(a: Asset, o: Partial<IntentParams> = {}): Quote {
 
 function leveragePerpQuote(a: Asset, o: Partial<IntentParams>, dir: "long" | "short"): Quote {
   const p = { ...DEF, ...o };
-  const lev = 3; // demo default; adjustable in chat
+  const lev = Math.min(20, Math.max(2, Math.round(o.leverage ?? 3))); // adjustable in chat / tune card
   const signed = dir === "long" ? lev : -lev;
   const stop = p.stopLossPct ?? 0.4;
   return {

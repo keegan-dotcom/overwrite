@@ -178,16 +178,22 @@ export function planFromIntent(parsed: ParsedIntent, account?: AccountCtx): Stra
       // turn off the defined-risk guard and instead BOUND it with a notional cap
       // (the executor also enforces a free-margin buffer before it opens).
       const up = parsed.strategyId === "perp_long";
-      const lev = 3;
+      const lev = Math.min(20, Math.max(2, Math.round(p.leverage ?? 3)));
+      // notional = leverage × the cash you can post as margin (real free USDC on
+      // mainnet; falls back to one unit of spot in the demo preview). The
+      // executor ALSO enforces a free-margin buffer, so a too-high leverage is
+      // capped to what margin actually allows.
+      const marginBase = account?.freeUsdc && account.freeUsdc > 0 ? account.freeUsdc : spot;
+      const notional = Math.round(lev * marginBase);
       objectiveKind = "directional";
       objective.kind = "directional";
       objective.view = up ? "up" : "down";
       constraints.requireDefinedRisk = false;
-      constraints.maxNotionalUsd = Math.round(lev * spot); // ~one unit at leverage; tune in the card
+      constraints.maxNotionalUsd = notional;
       objective.stopLossPct = p.stopLossPct ?? 0.4;
       legs.push({
         id: "perp", venue: "perp", asset, side: up ? "buy" : "sell", orderType: "ioc",
-        sizing: { kind: "notional_usd", usd: Math.round(lev * spot) },
+        sizing: { kind: "notional_usd", usd: notional },
       });
       label = `${asset} ${lev}× ${up ? "long" : "short"} (perp)`;
       break;

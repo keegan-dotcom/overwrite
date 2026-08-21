@@ -53,7 +53,7 @@ function detectStrategy(text: string): string {
     return "strangle";
   // ---- direct directional buys (the "just buy me calls" path) --------------
   // a buy-ish verb + the word calls/puts, unless it's clearly a premium-SELL.
-  const buyish = has("buy", "long", "get", "want", "grab", "give me", "load up", "ape", "pick up", "purchase");
+  const buyish = has("buy", "long", "get", "want", "grab", "give me", "load up", "ape", "pick up", "purchase", "spend", "put ", "into");
   const sellish = has("covered call", "sell call", "sell a call", "write call", "sell my call", "sell put", "sell a put", "cash secured", "cash-secured", "wheel");
   if (buyish && !sellish && /\bcalls?\b/.test(text) && !/\bputs?\b/.test(text)) return "call";
   if (buyish && !sellish && /\bputs?\b/.test(text)) return "put";
@@ -125,6 +125,26 @@ export function parseIntent(text: string): ParsedIntent {
     }
   }
 
+  // leverage: "5x", "10 x", "3× long"
+  const lev = t.match(/(\d+(?:\.\d+)?)\s*x\b/);
+  if (lev) {
+    const L = Math.min(20, Math.max(2, Math.round(parseFloat(lev[1]))));
+    params.leverage = L;
+    understood.push(`Leverage: ${L}×`);
+  }
+
+  // dollar buy-size for direct option buys: "$100 of", "spend $100", "$100 worth"
+  // (kept distinct from a "$120 strike" price, which is capTarget above).
+  const sizeM = t.match(/(?:spend|buy|put|use)\s*\$?\s?([\d,.]+\s?[km]?)\s*(?:of|worth|into|on)|\$?\s?([\d,.]+\s?[km]?)\s*(?:worth|of)\s+(?:call|put|option|lotto)/);
+  if (sizeM) {
+    const raw = sizeM[1] ?? sizeM[2] ?? "";
+    const v = parseMoney(raw);
+    if (isFinite(v) && v > 0 && v < 1_000_000) {
+      params.sizeUsd = v;
+      understood.push(`Budget: $${v.toLocaleString()}`);
+    }
+  }
+
   // horizon: "weekly", "monthly", "45 days", "2 months"
   const d = t.match(/(\d+)\s*(day|days|d\b)/);
   const mo = t.match(/(\d+)\s*(month|months|mo\b)/);
@@ -146,8 +166,8 @@ export function parseIntent(text: string): ParsedIntent {
 /** Quick-start prompts shown as chips in the chat. */
 export const SUGGESTED_PROMPTS = [
   "Earn 10% a year on my BTC - happy to sell above $120k. Close it if I'm down 20%.",
+  "Buy me $500 of ETH calls, 60 days out",
   "Protect my ETH from a crash but keep the upside",
-  "Lock my HYPE in a range that costs nothing",
   "Get paid to buy the ETH dip",
   "Short HYPE with capped risk",
   "Earn yield on my BTC without betting on the price",

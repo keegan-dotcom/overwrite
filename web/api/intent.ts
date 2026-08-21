@@ -72,6 +72,8 @@ RULES
   · DEGEN (leverage / naked): "leverage long" / "ape" / "Nx long" → perp_long; "leverage short" → perp_short; "sell a strangle" / "sell premium both sides" (naked) → strangle. Always name the liquidation / undefined-risk danger in "reply".
 - targetYieldAnnual: decimal (10% → 0.1), only if the user expresses an income/yield goal.
 - capTarget: a PRICE of the underlying. For call/put/lotto it is the STRIKE the user names ("$100 strike", "the 4500s"). For income/collar it is the "happy to sell above" level; for shield it is the floor. Only include if plausible (0.3x–4x spot). Never invent one.
+- sizeUsd: a DOLLAR BUDGET to spend on a direct call/put/lotto buy ("buy $100 of calls", "put $500 into puts"). This is money spent, NOT a strike price — keep it separate from capTarget.
+- leverage: for perp_long / perp_short, the multiple the user asks for ("5x" → 5, "ape 10x" → 10). Clamp 2–20. Omit for non-perp strategies.
 - stopLossPct: decimal, from "close/bail/exit if down X%".
 - dte: days to expiry if the user implies a horizon (weekly → 7, monthly → 30). Clamp 3-120. Omit if unsaid.
 - FOLLOW-UPS: when a lastIntent JSON is provided, the new message adjusts it. Return the FULL updated intent (e.g. "hit my yield target" → same asset/strategy/yield/stop but drop capTarget; "make the cap 130k" → update capTarget only).
@@ -91,6 +93,8 @@ const TOOL = {
       capTarget: { type: ["number", "null"], description: "price of the underlying, USD" },
       stopLossPct: { type: ["number", "null"], description: "decimal, e.g. 0.2 for 20%" },
       dte: { type: ["integer", "null"], description: "days to expiry, 3-120" },
+      sizeUsd: { type: ["number", "null"], description: "dollar budget to spend on a direct option buy" },
+      leverage: { type: ["number", "null"], description: "perp leverage 2-20 (perp strategies only)" },
       understood: { type: "array", items: { type: "string" }, description: "2-5 short parse traces" },
       reply: { type: "string", description: "1-2 sentence plain-English response" },
     },
@@ -164,12 +168,16 @@ export default async function handler(req: Request): Promise<Response> {
   const cap = num(input.capTarget);
   const stop = num(input.stopLossPct);
   const dte = num(input.dte);
+  const sizeUsd = num(input.sizeUsd);
+  const leverage = num(input.leverage);
 
   const params: Record<string, number> = {};
   if (y != null && y > 0.004 && y <= 1.5) params.targetYieldAnnual = y;
   if (cap != null && cap > asset.spot * 0.3 && cap < asset.spot * 4) params.capTarget = cap;
   if (stop != null && stop >= 0.01 && stop <= 0.9) params.stopLossPct = stop;
   if (dte != null && dte >= 3 && dte <= 120) params.dte = Math.round(dte);
+  if (sizeUsd != null && sizeUsd > 0 && sizeUsd < 1_000_000) params.sizeUsd = sizeUsd;
+  if (leverage != null && leverage >= 2 && leverage <= 20) params.leverage = Math.round(leverage);
 
   const understood = Array.isArray(input.understood)
     ? input.understood.filter((x: unknown) => typeof x === "string").slice(0, 6)

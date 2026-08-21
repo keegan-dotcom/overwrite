@@ -92,7 +92,7 @@ async function fetchLlmIntent(message: string, lastIntent: unknown): Promise<Inc
 
 const HELLO: ChatMsg = {
   role: "agent",
-  text: "I manage options strategies from your own isolated vault. Tell me what you want in plain English - an income target, a price you'd happily sell at, a floor you won't go below - and I'll structure the trade, show you every tradeoff, and run it until you say otherwise.",
+  text: "Tell me what you want in plain English and I'll structure it, show every tradeoff, and run it 24/7 from your own isolated vault. Anything from \"earn 10% on my BTC\" or \"protect my ETH\" to a straight \"buy me $500 of ETH calls\" — I'll suggest a smart structure you can tune and deploy in one click. (Flip on Degen mode for leverage and naked-premium plays.)",
 };
 
 export function AppDemo() {
@@ -196,7 +196,15 @@ export function AppDemo() {
     const merged = { ...prefsRef.current, ...params };
     const q = s.quote(a, merged);
     const held = qtyIn(portfolioRef.current, sym);
-    const qty = held > 0 ? held : 1; // zero balance -> preview sized to 1 unit
+    // Sizing model: COVERED strategies scale to what you hold; DIRECT buys and
+    // perps are one position by default, then sized by $-budget / leverage.
+    const HOLD_SCALED = new Set(["income", "shield", "collar", "neutral"]);
+    const DIRECT_BUY = new Set(["call", "put", "lotto"]);
+    let qty = 1;
+    if (HOLD_SCALED.has(stratId) && held > 0) qty = held;
+    else if (DIRECT_BUY.has(stratId) && merged.sizeUsd && (q.legs[0]?.premium ?? 0) > 0) {
+      qty = Math.max(0.1, Math.round((merged.sizeUsd / q.legs[0].premium) * 10) / 10);
+    }
     setSelected(sym);
     setPickedId(stratId);
     setTicket(q);
@@ -207,6 +215,10 @@ export function AppDemo() {
     try {
       const { plan, result } = planAndValidate(
         { symbol: sym, strategyId: stratId, params: merged, understood: [] }, currentAcct());
+      // sync the deployable contract count to the ticket's $-budget size
+      if (result.ok && DIRECT_BUY.has(stratId)) {
+        for (const l of plan.legs) if (l.sizing.kind === "contracts") l.sizing.amount = qty;
+      }
       setPendingPlan(result.ok ? plan : null);
     } catch { setPendingPlan(null); }
     if (mode === "shelf") {
@@ -567,7 +579,11 @@ export function AppDemo() {
     const msg = existing
       ? `Replace your live strategy (${existing}) with "${pendingPlan.label}" and go LIVE now with real funds? Your existing orders get cancelled and it places its first order immediately.`
       : `Deploy "${pendingPlan.label}" and go LIVE now with real funds on Derive mainnet? It places its first order immediately. You can pause or unwind anytime.`;
-    if (!window.confirm(msg)) return;
+    // degen (leverage / naked) → an explicit extra warning before real funds move.
+    const degen = pendingPlan.constraints?.requireDefinedRisk === false
+      || pendingPlan.legs.some((l) => l.venue === "perp");
+    const warn = degen ? "⚠ HIGH-RISK STRATEGY (leverage / naked options): this can be liquidated or lose MORE than you put in.\n\n" : "";
+    if (!window.confirm(warn + msg)) return;
     setDeploying(true);
     try {
       await hostedDeployPlan(dw, wallet.address, pendingPlan); // sets the plan (server forces dry-run)

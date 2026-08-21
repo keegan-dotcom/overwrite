@@ -24,7 +24,11 @@ async function post(path: string, body: unknown): Promise<any> {
 }
 
 /** Human label for what the agent is running, from its config. */
-export function strategyLabel(config?: { symbol?: string; sweep?: { buy?: string } }): string {
+export function strategyLabel(config?: { symbol?: string; sweep?: { buy?: string }; plan?: { label?: string } }): string {
+  // Prefer the deployed plan's own label (covers calls/puts/perps/strangle/etc);
+  // fall back to the legacy covered-call wording for the pre-IR config shape.
+  const planLabel = config?.plan?.label;
+  if (planLabel && typeof planLabel === "string") return planLabel;
   const sym = (config?.symbol ?? "ETH").toUpperCase();
   const buy = config?.sweep?.buy?.toUpperCase();
   return `${sym} covered-call income${buy ? ` · premium → ${buy}` : ""}`;

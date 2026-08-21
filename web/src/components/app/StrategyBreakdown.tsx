@@ -68,17 +68,30 @@ function describe(cfg: Cfg): { title: string; summary: string; rows: Row[]; flag
   const shortCall = legs.find((l) => l.venue === "option" && l.side === "sell" && l.option?.type === "C");
   const shortPut = legs.find((l) => l.venue === "option" && l.side === "sell" && l.option?.type === "P");
   const longPut = legs.find((l) => l.venue === "option" && l.side === "buy" && l.option?.type === "P");
+  const longCall = legs.find((l) => l.venue === "option" && l.side === "buy" && l.option?.type === "C");
   const perp = legs.find((l) => l.venue === "perp");
+  const perpHedged = perp && (shortCall || shortPut);         // neutral: perp is a hedge
+  const perpDirectional = perp && !shortCall && !shortPut;    // degen: perp IS the bet
+  const isStrangle = shortCall && shortPut;                   // naked premium both sides
+  const isProtect = obj === "protect";
 
   // ---- title + one-line summary ------------------------------------------
   let title = plan?.label ?? `${asset} covered-call income`;
   let summary: string;
-  if (perp && shortCall) {
+  if (perpHedged) {
     summary = `You hold ${asset} and sell calls against it for income, while a short ${asset} perp cancels out the price swings — so you earn premium with roughly zero exposure to where ${asset} goes.`;
+  } else if (perpDirectional) {
+    summary = `A leveraged ${perp!.side === "buy" ? "LONG" : "SHORT"} on ${asset} via perps. Your P&L is amplified in both directions, and a hard enough move against you can be liquidated.`;
+  } else if (isStrangle) {
+    summary = `Selling premium on ${asset} both ways (a naked strangle): you pocket income while ${asset} stays in a range, and you're exposed if it breaks out hard in either direction.`;
   } else if (longPut && shortCall) {
     summary = `A collar on your ${asset}: a bought put sets a floor under losses, and a sold call pays for that protection (and caps upside in return).`;
+  } else if (longCall) {
+    summary = `A bullish bet on ${asset}: you bought calls. Upside is uncapped above the strike, and the most you can lose is the premium you paid.`;
+  } else if (longPut && isProtect) {
+    summary = `Downside insurance on your ${asset}: a bought put floors how far your ${asset} can fall while you keep all the upside.`;
   } else if (longPut) {
-    summary = `Downside insurance on your ${asset}: a bought put floors how far your ${asset} can fall.`;
+    summary = `A bearish bet on ${asset}: you bought puts. You profit as ${asset} falls, and the most you can lose is the premium you paid — no short-squeeze risk.`;
   } else if (shortPut) {
     summary = `The wheel: you sell cash-secured ${asset} puts to earn premium, and if ${asset} dips to the strike you get assigned — you buy the ${asset} you wanted anyway, at a discount.`;
   } else {
@@ -89,14 +102,25 @@ function describe(cfg: Cfg): { title: string; summary: string; rows: Row[]; flag
   const rows: Row[] = [];
   rows.push({ k: "Asset", v: asset });
   rows.push({ k: "Strategy", v: title });
-  const optLeg = shortCall ?? longPut ?? shortPut;
+  const optLeg = shortCall ?? longCall ?? longPut ?? shortPut;
   if (optLeg?.option) {
     rows.push({ k: optLeg.side === "sell" ? "Sell strike" : "Buy strike", v: strikeEnglish(optLeg.option.strike) });
     const e = optLeg.option.expiry;
     if (e) rows.push({ k: "Expiry", v: `${e.dteMin}–${e.dteMax} days out, rolled each cycle` });
     rows.push({ k: "Size", v: sizeEnglish(optLeg.sizing, asset) });
   }
-  if (perp) rows.push({ k: "Hedge", v: `short ${asset} perp, re-balanced as delta drifts` });
+  if (isStrangle && shortPut?.option) {
+    rows.push({ k: "Put strike", v: strikeEnglish(shortPut.option.strike) });
+  }
+  if (perp) {
+    const notional = perp.sizing.kind === "notional_usd" ? Number(perp.sizing.usd) : 0;
+    rows.push({
+      k: perpDirectional ? "Position" : "Hedge",
+      v: perpDirectional
+        ? `${perp.side === "buy" ? "long" : "short"} ${asset} perp${notional ? ` · up to ~$${notional.toLocaleString()} notional` : ""}`
+        : `short ${asset} perp, re-balanced as delta drifts`,
+    });
+  }
   const ty = plan?.objective?.targetYieldAnnual;
   if (ty) rows.push({ k: "Target income", v: `~${(ty * 100).toFixed(0)}%/yr in premium (not a guaranteed APY)` });
   if (cfg.min_yield != null) rows.push({ k: "Min yield floor", v: `skips any option paying under ${(cfg.min_yield * 100).toFixed(0)}%/yr` });
@@ -105,29 +129,51 @@ function describe(cfg: Cfg): { title: string; summary: string; rows: Row[]; flag
   const maxLoss = plan?.constraints?.maxLossUsd;
   rows.push({ k: "Max-loss cap", v: maxLoss != null ? `$${maxLoss.toLocaleString()} hard stop` : "none set" });
 
-  // ---- ELI5 risk flags ----------------------------------------------------
+  // ---- ELI5 risk flags (strategy-aware) -----------------------------------
   const flags: Flag[] = [];
-  if (shortCall) {
-    flags.push({ tone: "warn", text: `Upside is capped. If ${asset} rips above the call's strike, your gains stop there — you keep everything up to the strike, plus the premium, but miss the rest.` });
+  if (perpDirectional) {
+    flags.push({ tone: "warn", text: `Liquidation risk. This is leveraged — a hard enough move against you wipes the position, and you can lose more than a plain spot trade. The agent auto-closes at your stop, but a fast wick can blow through it.` });
+    flags.push({ tone: "warn", text: `Funding cost. You pay (or earn) funding every hour to hold the perp; in a strong trend it adds up.` });
+  } else if (isStrangle) {
+    flags.push({ tone: "warn", text: `Undefined risk both ways. A big move past either strike loses more than the premium you took in — this is NAKED, not defined-risk.` });
+    flags.push({ tone: "warn", text: `Best in calm, range-bound markets. Around a catalyst (news, unlock, earnings) it's dangerous.` });
+    flags.push({ tone: "info", text: `You keep the full premium only if ${asset} finishes between the two strikes.` });
+  } else if (perpHedged) {
+    flags.push({ tone: "warn", text: `Upside is capped by the sold call, and the perp hedge carries funding + rebalancing cost — that drag is the price of staying market-neutral.` });
+    flags.push({ tone: "info", text: `The point is yield with roughly zero price exposure — not a big win if ${asset} rips, not a big loss if it dumps.` });
+  } else if (longCall) {
+    flags.push({ tone: "good", text: `Defined risk. The most you can lose is the premium you paid — no liquidation, no assignment.` });
+    flags.push({ tone: "warn", text: `Time decay + a move needed. ${asset} has to climb past the strike (plus the premium) before expiry, or the call bleeds toward zero.` });
+  } else if (longPut && !shortCall) {
+    if (isProtect) {
+      flags.push({ tone: "good", text: `Downside floored. There's a price below which you stop losing — your worst case (minus the put's cost). Full upside kept.` });
+      flags.push({ tone: "info", text: `Insurance costs premium each cycle; in calm markets that bleeds — the agent flags when it's not worth renewing.` });
+    } else {
+      flags.push({ tone: "good", text: `Defined risk. Max loss is the premium you paid — no short-squeeze, no liquidation.` });
+      flags.push({ tone: "warn", text: `Time decay + a move needed. ${asset} has to fall past the strike before expiry, or the put decays toward zero.` });
+    }
+  } else {
+    // covered call / collar / wheel family
+    if (shortCall) {
+      flags.push({ tone: "warn", text: `Upside is capped. Above the call's strike your gains stop — you keep everything up to it plus the premium, but miss the rest.` });
+      if (!longPut) flags.push({ tone: "warn", text: `No downside protection. If ${asset} falls you still hold it and feel the drop — the premium only softens it a little.` });
+    }
+    if (shortPut) {
+      flags.push({ tone: "warn", text: `You can be assigned. If ${asset} drops below the put strike, you buy it there with your USDC — fine if you wanted more ${asset}, a paper loss if it keeps falling.` });
+    }
+    if (longPut && shortCall) {
+      flags.push({ tone: "good", text: `Downside is floored by the bought put — there's a level below which you stop losing.` });
+    }
   }
-  if ((shortCall || shortPut) && !longPut && !perp) {
-    flags.push({ tone: "warn", text: `No downside protection. If ${asset} falls you still hold it and feel the drop — the premium you collect only softens it a little.` });
+
+  if (shortCall || shortPut) {
+    flags.push({ tone: "info", text: `Premium is real income, not a fixed APY — it moves with ${asset}'s volatility, higher when markets are jumpy.` });
   }
-  if (shortPut) {
-    flags.push({ tone: "warn", text: `You can be assigned. If ${asset} drops below the put strike, you buy ${asset} at that strike using your USDC — fine if you wanted more ${asset}, a paper loss if it keeps falling.` });
-  }
-  if (longPut) {
-    flags.push({ tone: "good", text: `Downside is floored. The bought put means there's a price below which you stop losing — that's your worst case (minus what the put cost).` });
-  }
-  if (perp) {
-    flags.push({ tone: "warn", text: `The perp hedge has funding + liquidation risk. It costs (or pays) funding each hour, and a violent move can force it to de-lever. The agent watches funding and unwinds the hedge if it turns punitive.` });
-  }
-  flags.push({ tone: "info", text: `Income is real premium, not a fixed rate. It moves with ${asset}'s volatility — higher when markets are jumpy, lower when they're calm.` });
-  if (plan?.constraints?.requireDefinedRisk && !perp) {
+  if (plan?.constraints?.requireDefinedRisk && !perp && !isStrangle) {
     flags.push({ tone: "good", text: `Defined risk. The agent can only trade against ${asset}/cash you actually hold — never a naked, borrowed, or leveraged position.` });
   }
-  if (maxLoss == null) {
-    flags.push({ tone: "warn", text: `No hard dollar stop-loss. Nothing auto-closes the position if ${asset} craters — tell the agent in chat (e.g. "close if down 15%") if you want a floor.` });
+  if (maxLoss == null && (perpDirectional || isStrangle)) {
+    flags.push({ tone: "warn", text: `No hard dollar stop-loss set — add one in chat (e.g. "close if down 20%") to cap the damage.` });
   }
 
   return { title, summary, rows, flags };
