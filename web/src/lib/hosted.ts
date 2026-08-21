@@ -102,7 +102,7 @@ function controlMessage(deriveWallet: string, patch: Record<string, unknown>, ts
 }
 async function signedControl(
   deriveWallet: string, ownerEoa: string,
-  patch: { live: boolean } | { kill: boolean } | { plan: unknown },
+  patch: { live: boolean } | { kill: boolean } | { unwind: boolean } | { plan: unknown },
 ): Promise<any> {
   const eth = (window as unknown as { ethereum?: { request: (a: unknown) => Promise<unknown> } }).ethereum;
   if (!eth) throw new Error("no wallet to sign with");
@@ -165,6 +165,13 @@ export const hostedSetLive = (deriveWallet: string, ownerEoa: string, live: bool
   signedControl(deriveWallet, ownerEoa, { live });
 export const hostedPause = (deriveWallet: string, ownerEoa: string, kill: boolean) =>
   signedControl(deriveWallet, ownerEoa, { kill });
+
+/** Owner-only: UNWIND — put the agent in close-only mode. It cancels resting
+ * orders and buys back / sells out every open option position (reduce-only)
+ * until the book is flat, then auto-pauses. Distinct from kill (which just
+ * stops and LEAVES positions on). Requires a wallet signature. */
+export const hostedUnwind = (deriveWallet: string, ownerEoa: string) =>
+  signedControl(deriveWallet, ownerEoa, { unwind: true });
 
 /** Owner-only: deploy a structured plan to the hosted agent. The server always
  * forces it to start dry-run (live:false); the owner reviews dry-run cycles in

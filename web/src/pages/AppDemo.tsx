@@ -11,6 +11,7 @@ import { HostedPanel } from "../components/app/HostedPanel";
 import { Console } from "../components/app/Console";
 import { TermsGate, termsAccepted } from "../components/app/TermsGate";
 import { hostedStatus, HostedStatus, hostedDeployPlan, hostedSetLive, hostedPause, strategyLabel } from "../lib/hosted";
+import { TuneCard } from "../components/app/TuneCard";
 import { resolveInstance, getNetwork, setNetwork } from "../lib/instance";
 import { AgentBar } from "../components/app/AgentBar";
 import { VENUES, VenueMode } from "../data/venues";
@@ -847,6 +848,9 @@ export function AppDemo() {
               <div className="min-h-0 flex-1">
                 <IntentChat messages={messages} onSend={onSend} thinking={thinking} defaultsNote={defaultsNote} />
               </div>
+              {pendingPlan && (
+                <TuneCard plan={pendingPlan} onChange={setPendingPlan} />
+              )}
               {onMainnet && hostedSt?.enrolled && pendingPlan && (
                 <div className="flex items-center gap-2 border-2 border-mint bg-ink px-3 py-2">
                   <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-mint">

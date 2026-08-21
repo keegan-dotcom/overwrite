@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { HostedStatus, hostedSetLive, hostedPause, strategyLabel } from "../../lib/hosted";
+import { HostedStatus, hostedSetLive, hostedPause, hostedUnwind, strategyLabel } from "../../lib/hosted";
 import { fmtUsd } from "../../lib/options";
 
 /**
@@ -22,8 +22,12 @@ export function AgentBar({
 
   const live = st.config?.live === true;
   const killed = (st as { kill?: boolean }).kill === true;
+  const unwinding = (st.config as { unwind?: boolean } | undefined)?.unwind === true;
   const orders = st.open_orders ?? [];
   const pos = st.positions ?? [];
+  // net debit to flatten: buy back shorts (cost), sell out longs (credit).
+  const closeCost = pos.reduce(
+    (a, p) => a + (p.amount < 0 ? 1 : -1) * Math.abs(p.amount) * (p.mark || 0), 0);
 
   const act = async (label: string, fn: () => Promise<unknown>, confirmMsg?: string) => {
     if (confirmMsg && !window.confirm(confirmMsg)) return;
@@ -33,7 +37,9 @@ export function AgentBar({
     finally { setBusy(null); }
   };
 
-  const state = killed
+  const state = unwinding
+    ? { dot: "bg-amber animate-pulse", text: "UNWINDING (closing out)", cls: "text-amber" }
+    : killed
     ? { dot: "bg-rose", text: "PAUSED (killed)", cls: "text-rose" }
     : live
     ? { dot: "bg-mint animate-pulse", text: "AGENT LIVE", cls: "text-mint" }
@@ -70,6 +76,19 @@ export function AgentBar({
 
         {/* controls */}
         <div className="flex items-center gap-1.5">
+          {unwinding && (
+            <span className="border-2 border-amber px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase text-amber">
+              closing…
+            </span>
+          )}
+          {pos.length > 0 && !unwinding && (
+            <button onClick={() => act("unwind", () => hostedUnwind(deriveWallet, ownerEoa),
+              `UNWIND — close out all ${pos.length} open position${pos.length > 1 ? "s" : ""} and go FLAT?\n\nThe agent buys back / sells out everything (reduce-only) until your book is empty, then pauses. Estimated ${closeCost >= 0 ? `~$${closeCost.toFixed(0)} to close (debit)` : `~$${Math.abs(closeCost).toFixed(0)} credit`}.\n\nThis is different from Kill: Kill just STOPS the agent and leaves your positions on. Unwind actually CLOSES them so you have no risk.`)}
+              disabled={!!busy}
+              className="border-2 border-paper bg-amber px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase text-ink shadow-hardsm transition-transform hover:-translate-y-px disabled:opacity-50">
+              {busy === "unwind" ? "…" : "Unwind ✕"}
+            </button>
+          )}
           {!killed && (
             live ? (
               <button onClick={() => act("pause", () => hostedSetLive(deriveWallet, ownerEoa, false))}
@@ -94,7 +113,7 @@ export function AgentBar({
             </button>
           ) : (
             <button onClick={() => act("kill", () => hostedPause(deriveWallet, ownerEoa, true),
-              "KILL the agent?\n\nIt stops immediately and places no more orders. Your positions are untouched. You can un-kill later.")}
+              `KILL the agent?\n\nIt stops immediately and places no more orders.${pos.length > 0 ? `\n\n⚠ You still have ${pos.length} open position${pos.length > 1 ? "s" : ""} — Kill does NOT close them. To be fully flat with no risk, use Unwind instead.` : " Your positions are untouched."}\n\nYou can un-kill later.`)}
               disabled={!!busy}
               className="border-2 border-rose px-2.5 py-1 font-mono text-[10.5px] font-bold uppercase text-rose transition-colors hover:bg-rose hover:text-ink disabled:opacity-50">
               {busy === "kill" ? "…" : "Kill"}
